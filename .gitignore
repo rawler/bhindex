@@ -1,0 +1,11 @@
+# All editor-backups
+*~
+
+# Python-compiled files
+*.pyc
+
+# Default db-name and my.config
+/bhindex.db
+/my.config
+
+
