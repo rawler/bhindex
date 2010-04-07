@@ -3,7 +3,7 @@
 
 import os, os.path as path, sys
 from ConfigParser import ConfigParser
-import subprocess
+import subprocess, urllib2
 
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
@@ -14,16 +14,15 @@ config = ConfigParser()
 config.read(path.join(HERE, 'my.config'))
 
 LINKDIR = config.get('LINKSEXPORT', 'linksdir')
-TXTPATH = config.get('TXTSYNC', 'exportpath')
+IMPORTS = config.get('TXTSYNC', 'imports').split(',')
 
 DB = db.open(config)
 
-name_dict = dict()
-
-for k,v in DB.iteritems('dn:'):
-    name_dict[k] = v
-
-outfile = open(TXTPATH, 'w')
-for _,v in name_dict.iteritems():
-    outfile.write("%s\n"%v.magnetURL())
-outfile.close()
+for imp in IMPORTS:
+    url = config.get('txt_'+imp, 'url')
+    input = urllib2.urlopen(url)
+    for line in input:
+        if line.startswith('magnet:'):
+            DB.merge(line)
+    input.close()
+DB.commit()
