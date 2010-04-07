@@ -28,6 +28,5 @@ for line in bhup_out.splitlines():
     except ValueError:
         continue
     if proto == 'magnet':
-        asset = db.Asset.fromMagnet(line)
-        DB.merge(asset)
+        DB.merge(line)
 DB.commit()

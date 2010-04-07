@@ -48,6 +48,8 @@ class DB(object):
         return pickle.loads(self.db[key])
 
     def merge(self, asset):
+        if isinstance(asset, basestring):
+            asset = Asset.fromMagnet(asset)
         idxs = [str(x) for x in asset.indexes()]
         for idx in idxs:
             try: oldAsset = self[idx]
