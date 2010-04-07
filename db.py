@@ -11,7 +11,12 @@ class Asset(object):
         self.hashIds = dict([id.rsplit(':', 1) for id in hashIds])
 
     def magnetURL(self):
-        pass
+        if self.name:
+            name = 'dn=%s&' % self.name
+        else:
+            name = ''
+        return "magnet:?%s%s" % (name, '&'.join(['xt=%s:%s'%(k,v) for k,v in self.hashIds.iteritems()]))
+    __str__ = magnetURL
 
     def update(self, other):
         if other.name and not self.name:
@@ -56,6 +61,11 @@ class DB(object):
 
     def commit(self):
         self.db.sync()
+
+    def iteritems(self, prefix=""):
+        for k,v in self.db.iteritems():
+            if k.startswith(prefix):
+                yield k[len(prefix):], pickle.loads(v)
 
 def open(config):
     if isinstance(config, basestring):
