@@ -5,10 +5,13 @@ import os, os.path as path, sys
 from ConfigParser import ConfigParser
 import subprocess
 
+HERE = path.dirname(__file__)
+sys.path.append(HERE)
+
 import db
 
 config = ConfigParser()
-config.read(path.join(path.dirname(__file__), 'my.config'))
+config.read(path.join(HERE, 'my.config'))
 
 DB = db.open(config)
 
@@ -27,3 +30,4 @@ for line in bhup_out.splitlines():
     if proto == 'magnet':
         asset = db.Asset.fromMagnet(line)
         DB.merge(asset)
+DB.commit()

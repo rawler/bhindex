@@ -8,33 +8,53 @@ import cPickle as pickle
 class Asset(object):
     def __init__(self, name, hashIds):
         self.name = name
-        self.hashIds = hashIds
+        self.hashIds = dict([id.rsplit(':', 1) for id in hashIds])
 
     def magnetURL(self):
         pass
 
+    def update(self, other):
+        if other.name and not self.name:
+            self.name = other.name
+        self.hashIds.update(other.hashIds)
+
     def indexes(self):
-        return self.hashIds+[self.name]
+        retval = ['%s:%s'%(k,v) for k,v in self.hashIds.iteritems()]
+        if self.name:
+            return retval+["dn:"+self.name]
+        else:
+            return retval
 
     @classmethod
     def fromMagnet(cls, magnetURL):
         url = urlparse(magnetURL)
         info = parse_qs(url.path[1:])
-        return cls(info['dn'], info['xt'])
+
+        if 'dn' in info:  name = info['dn'][0]
+        else:             name = None
+
+        return cls(name, info['xt'])
 
 class DB(object):
     def __init__(self, config):
         self.db = anydbm.open(config.get('DB', 'file'), 'c')
-        self.__getitem__ = self.db.__getitem__
-        self.__setitem__ = self.db.__setitem__
-        self.iteritems = self.db.iteritems
-        self.__iter__ = self.db.__iter__
+
+    def __getitem__(self, key):
+        return pickle.loads(self.db[key])
 
     def merge(self, asset):
-        for idx in asset.indexes():
-            self.db[str(idx)] = pickle.dumps(asset)
+        idxs = [str(x) for x in asset.indexes()]
+        for idx in idxs:
+            try: oldAsset = self[idx]
+            except KeyError: pass
+            else:
+                if oldAsset:
+                    oldAsset.update(asset)
+                    asset = oldAsset
+        for idx in idxs:
+            self.db[idx] = pickle.dumps(asset)
 
-    def commit():
+    def commit(self):
         self.db.sync()
 
 def open(config):
