@@ -3,6 +3,7 @@ import anydbm
 
 from ConfigParser import ConfigParser
 from urlparse import urlparse, parse_qs
+from urllib import quote_plus as urlquote
 import cPickle as pickle
 
 class Asset(object):
@@ -12,7 +13,7 @@ class Asset(object):
 
     def magnetURL(self):
         if self.name:
-            name = 'dn=%s&' % self.name
+            name = 'dn=%s&' % urlquote(self.name)
         else:
             name = ''
         return "magnet:?%s%s" % (name, '&'.join(['xt=%s:%s'%(k,v) for k,v in self.hashIds.iteritems()]))
