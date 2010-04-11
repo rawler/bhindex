@@ -41,9 +41,9 @@ if __name__ == '__main__':
     usage = "usage: %prog [options] file1 [file2 ...]" \
             "  An argument of '-' will expand to filenames read line for line on standard input."
     parser = OptionParser(usage=usage)
-    parser.add_option("-p", "--keep-path",
-                      action="store_true", dest="keeppath", default=False,
-                      help="Retain the full path in generated magnetUrl:s")
+    parser.add_option("-s", "--strip-path", action="store_const", dest="sanitizer",
+                      default=sanitizedpath, const=path.basename,
+                      help="Strip name to just the name of the file, without path")
     parser.add_option("-f", "--force",
                       action="store_true", dest="force", default=False,
                       help="Force upload even of assets already in sync in index")
@@ -57,9 +57,9 @@ if __name__ == '__main__':
     def add(file):
         '''Try to upload one file to bithorde and add to index'''
         file = path.normpath(file)
-        if options.keeppath:   name = sanitizedpath(file)
-        else:                  name = path.basename(file)
+        name = options.sanitizer(file)
         mtime = path.getmtime(file)
+
         oldasset = DB.by_name(name)
         if (not options.force) and oldasset and hasattr(oldasset,'mtime') \
              and (oldasset.mtime == mtime):
