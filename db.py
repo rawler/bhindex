@@ -12,10 +12,16 @@ class Asset(object):
         self.hashIds = dict([id.rsplit(':', 1) for id in hashIds])
 
     def magnetURL(self, name=None):
+        # Generate name
         if not name: name = self.name or ''
-        if name:
-            name = 'dn=%s&' % urlquote(name)
-        return "magnet:?%s%s" % (name, '&'.join(['xt=%s:%s'%(k,v) for k,v in self.hashIds.iteritems()]))
+        if name: name = 'dn=%s&' % urlquote(name)
+
+        # Generate mtime
+        if hasattr(self, 'mtime'): mtime = 'x.mtime=%d&' % self.mtime
+        else:                      mtime = ''
+
+        # Merge with hashIds
+        return "magnet:?%s%s%s" % (name, mtime, '&'.join(['xt=%s:%s'%(k,v) for k,v in self.hashIds.iteritems()]))
     __str__ = magnetURL
 
     def update(self, other):
@@ -40,7 +46,11 @@ class Asset(object):
         if 'dn' in info:  name = info['dn'][0]
         else:             name = None
 
-        return cls(name, info['xt'])
+        asset = cls(name, info['xt'])
+        if 'x.mtime' in info:
+            asset.mtime = int(info['x.mtime'][0])
+
+        return asset
 
 class DB(object):
     def __init__(self, config):
