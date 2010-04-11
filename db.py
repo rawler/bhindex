@@ -19,8 +19,10 @@ class Asset(object):
     __str__ = magnetURL
 
     def update(self, other):
-        if other.name and not self.name:
+        if other.name:
             self.name = other.name
+        if hasattr(other, 'mtime'):
+            self.mtime = other.mtime
         self.hashIds.update(other.hashIds)
 
     def indexes(self):
@@ -46,6 +48,12 @@ class DB(object):
 
     def __getitem__(self, key):
         return pickle.loads(self.db[key])
+
+    def by_name(self, name):
+        try:
+            return self['dn:'+name]
+        except KeyError:
+            return None
 
     def merge(self, asset):
         if isinstance(asset, basestring):
