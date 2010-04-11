@@ -36,7 +36,8 @@ def bh_upload(file, keep_path=False):
 
 if __name__ == '__main__':
     from optparse import OptionParser
-    usage = "usage: %prog [options] file1 [file2 ...]"
+    usage = "usage: %prog [options] file1 [file2 ...]" \
+            "  An argument of '-' will expand to filenames read line for line on standard input."
     parser = OptionParser(usage=usage)
     parser.add_option("-p", "--keep-path",
                       action="store_true", dest="keeppath", default=False,
@@ -47,10 +48,16 @@ if __name__ == '__main__':
         parser.error("At least one file must be specified")
 
     DB = db.open(config)
-    for file in args:
+    def add(file):
         asset = bh_upload(file, options.keeppath)
         if asset:
             DB.merge(asset)
         else:
             print "Error adding %s" % file
+    for arg in args:
+        if arg == '-':
+            for line in sys.stdin:
+                add(line.strip())
+        else:
+            add(arg)
     DB.commit()
