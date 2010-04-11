@@ -88,7 +88,4 @@ class DB(object):
                 yield k[len(prefix):], pickle.loads(v)
 
 def open(config):
-    if isinstance(config, basestring):
-        config = ConfigParser()
-        config.read(config)
     return DB(config)

@@ -8,10 +8,9 @@ import subprocess
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db
+import db, config
 
-config = ConfigParser()
-config.read(path.join(HERE, 'my.config'))
+config = config.read()
 
 bh_bindir = path.expanduser(config.get('BITHORDE', 'bindir'))
 bh_upload_bin = path.join(bh_bindir, 'bhupload')

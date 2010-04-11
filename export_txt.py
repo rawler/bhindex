@@ -8,10 +8,8 @@ import subprocess
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db
-
-config = ConfigParser()
-config.read(path.join(HERE, 'my.config'))
+import db, config
+config = config.read()
 
 LINKDIR = config.get('LINKSEXPORT', 'linksdir')
 TXTPATH = config.get('TXTSYNC', 'exportpath')
