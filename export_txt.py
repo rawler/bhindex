@@ -20,10 +20,7 @@ DB = db.open(config)
 
 name_dict = dict()
 
-for k,v in DB.iteritems('dn:'):
-    name_dict[k] = v
-
 outfile = open(TXTPATH, 'w')
-for _,v in name_dict.iteritems():
-    outfile.write("%s\n"%v.magnetURL())
+for k,v in DB.iteritems('dn:'):
+    outfile.write("%s\n"%v.magnetURL(k))
 outfile.close()

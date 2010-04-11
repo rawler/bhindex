@@ -11,11 +11,10 @@ class Asset(object):
         self.name = name
         self.hashIds = dict([id.rsplit(':', 1) for id in hashIds])
 
-    def magnetURL(self):
-        if self.name:
-            name = 'dn=%s&' % urlquote(self.name)
-        else:
-            name = ''
+    def magnetURL(self, name=None):
+        if not name: name = self.name or ''
+        if name:
+            name = 'dn=%s&' % urlquote(name)
         return "magnet:?%s%s" % (name, '&'.join(['xt=%s:%s'%(k,v) for k,v in self.hashIds.iteritems()]))
     __str__ = magnetURL
 
