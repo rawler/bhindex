@@ -13,20 +13,24 @@ import db
 config = ConfigParser()
 config.read(path.join(HERE, 'my.config'))
 
-DB = db.open(config)
-
 bh_bindir = path.expanduser(config.get('BITHORDE', 'bindir'))
-bh_upload = path.join(bh_bindir, 'bhupload')
+bh_upload_bin = path.join(bh_bindir, 'bhupload')
 
-bhup = subprocess.Popen([bh_upload, sys.argv[1]], stdout=subprocess.PIPE)
-bhup_out, _ = bhup.communicate()
+def bh_upload(file):
+    bhup = subprocess.Popen([bh_upload_bin, sys.argv[1]], stdout=subprocess.PIPE)
+    bhup_out, _ = bhup.communicate()
 
-magnet = None
-for line in bhup_out.splitlines():
-    try:
-        proto, _ = line.split(':', 1)
-    except ValueError:
-        continue
-    if proto == 'magnet':
-        DB.merge(line)
-DB.commit()
+    for line in bhup_out.splitlines():
+        try:
+            proto, _ = line.split(':', 1)
+        except ValueError:
+            continue
+        if proto == 'magnet':
+            return db.Asset.fromMagnet(line)
+    return None
+
+if __name__ == '__main__':
+    DB = db.open(config)
+    asset = bh_upload(sys.argv[1])
+    DB.merge(asset)
+    DB.commit()
