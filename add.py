@@ -8,7 +8,7 @@ import subprocess
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config
+import db, config, export_txt, export_links
 
 config = config.read()
 
@@ -40,6 +40,12 @@ if __name__ == '__main__':
     usage = "usage: %prog [options] file1 [file2 ...]" \
             "  An argument of '-' will expand to filenames read line for line on standard input."
     parser = OptionParser(usage=usage)
+    parser.add_option("-L", "--no-links", action="store_false",
+                      dest="export_links", default=True,
+                      help="When done, don't immediately export links to links-directory")
+    parser.add_option("-T", "--no-txt", action="store_false",
+                      dest="export_txt", default=True,
+                      help="When done, don't immediately publish txt-format index")
     parser.add_option("-s", "--strip-path", action="store_const", dest="sanitizer",
                       default=sanitizedpath, const=path.basename,
                       help="Strip name to just the name of the file, without path")
@@ -81,3 +87,8 @@ if __name__ == '__main__':
                 add(arg)
     finally:
         DB.commit()
+
+    if options.export_links:
+        export_links.main()
+    if options.export_txt:
+        export_txt.main()

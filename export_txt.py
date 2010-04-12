@@ -14,11 +14,13 @@ config = config.read()
 LINKDIR = config.get('LINKSEXPORT', 'linksdir')
 TXTPATH = config.get('TXTSYNC', 'exportpath')
 
-DB = db.open(config)
+def main():
+    DB = db.open(config)
 
-name_dict = dict()
+    outfile = open(TXTPATH, 'w')
+    for k,v in DB.iteritems('dn:'):
+        outfile.write("%s\n"%v.magnetURL(k))
+    outfile.close()
 
-outfile = open(TXTPATH, 'w')
-for k,v in DB.iteritems('dn:'):
-    outfile.write("%s\n"%v.magnetURL(k))
-outfile.close()
+if __name__=='__main__':
+    main()
