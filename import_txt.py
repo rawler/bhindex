@@ -21,6 +21,6 @@ for imp in IMPORTS:
     input = urllib2.urlopen(url)
     for line in input:
         if line.startswith('magnet:'):
-            DB.merge(line)
+            DB.merge(line.strip())
     input.close()
 DB.commit()
