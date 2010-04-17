@@ -5,31 +5,30 @@ from ConfigParser import ConfigParser
 from urlparse import urlparse, parse_qs
 from urllib import quote_plus as urlquote
 import cPickle as pickle
+import time
 
 class Asset(object):
     def __init__(self, name, hashIds):
         self.name = name
         self.hashIds = dict([id.rsplit(':', 1) for id in hashIds])
+        self.timestamp = time.time()
 
     def magnetURL(self, name=None):
         # Generate name
         if not name: name = self.name or ''
         if name: name = 'dn=%s&' % urlquote(name)
 
-        # Generate mtime
-        if hasattr(self, 'mtime'): mtime = 'x.mtime=%d&' % self.mtime
-        else:                      mtime = ''
-
         # Merge with hashIds
-        return "magnet:?%s%s%s" % (name, mtime, '&'.join(['xt=%s:%s'%(k,v) for k,v in self.hashIds.iteritems()]))
+        return "magnet:?%s%s" % (name, '&'.join(['xt=%s:%s'%(k,v) for k,v in self.hashIds.iteritems()]))
     __str__ = magnetURL
 
     def update(self, other):
-        if other.name:
+        if other.name and self.name != other.name:
             self.name = other.name
-        if hasattr(other, 'mtime'):
-            self.mtime = other.mtime
-        self.hashIds.update(other.hashIds)
+            self.timestamp = time.time()
+        if self.hashIds != other.hashIds:
+            self.hashIds.update(other.hashIds)
+            self.timestamp = time.time()
 
     def indexes(self):
         retval = ['%s:%s'%(k,v) for k,v in self.hashIds.iteritems()]
@@ -47,8 +46,6 @@ class Asset(object):
         else:             name = None
 
         asset = cls(name, info['xt'])
-        if 'x.mtime' in info:
-            asset.mtime = int(info['x.mtime'][0])
 
         return asset
 

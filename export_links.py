@@ -13,21 +13,21 @@ import db, config
 config = config.read()
 
 LINKDIR = path.normpath(config.get('LINKSEXPORT', 'linksdir'))
-MTIMEREF = path.join(LINKDIR, ".last_import")
+TIMEREF = path.join(LINKDIR, ".last_import")
 BHFUSEDIR = config.get('BITHORDE', 'fusedir')
 
-def main(check_mtime=False):
+def main(check_timestamp=False):
     DB = db.open(config)
 
-    if check_mtime == True:
-        check_mtime = path.exists(MTIMEREF) and path.getmtime(MTIMEREF)
+    if check_timestamp == True:
+        check_timestamp = path.exists(TIMEREF) and path.getmtime(TIMEREF)
 
     for k,v in DB.iteritems('dn:'):
         dst = path.normpath(path.join(LINKDIR, k))
         if not dst.startswith(LINKDIR):
             print "Warning! %s tries to break out of directory!"
             continue
-        if check_mtime and ((not hasattr(v,'mtime')) or (v.mtime < check_mtime)):
+        if check_timestamp and (v.timestamp < check_timestamp):
             continue
         if path.lexists(dst):
             os.unlink(dst)
@@ -36,14 +36,14 @@ def main(check_mtime=False):
             os.makedirs(dstdir)
         os.symlink(path.join(BHFUSEDIR, str(v)), dst)
 
-    with open(MTIMEREF, 'a'):
-        os.utime(MTIMEREF, None)
+    with open(TIMEREF, 'a'):
+        os.utime(TIMEREF, None)
 
 if __name__=='__main__':
     parser = OptionParser()
-    parser.add_option("-M", "--ignore-mtime", action="store_false",
-                      dest="check_mtime", default=True,
-                      help="Normally, only links with mtime higher than the last sync are added. This removes that check, adding ALL links.")
+    parser.add_option("-T", "--ignore-timestamps", action="store_false",
+                      dest="check_timestamp", default=True,
+                      help="Normally, only links with timestamps higher than the last sync are added. This removes that check, adding ALL links.")
     (options, args) = parser.parse_args()
 
-    main(options.check_mtime)
+    main(options.check_timestamp)
