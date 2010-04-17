@@ -66,14 +66,13 @@ if __name__ == '__main__':
         mtime = path.getmtime(file)
 
         oldasset = DB.by_name(name)
-        if (not options.force) and oldasset and hasattr(oldasset,'mtime') \
-             and (oldasset.mtime == mtime):
+        if (not options.force) and oldasset and hasattr(oldasset,'timestamp') \
+             and (oldasset.timestamp >= mtime):
             return # Skip this file if already in index
         else:
             asset = bh_upload(file)
             if asset:
                 asset.name = name
-                asset.mtime = mtime
                 DB.merge(asset)
             else:
                 print "Error adding %s" % file
