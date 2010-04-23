@@ -37,7 +37,7 @@ def bh_upload(file):
 
 if __name__ == '__main__':
     from optparse import OptionParser
-    usage = "usage: %prog [options] file1 [file2 ...]" \
+    usage = "usage: %prog [options] file1 [file2 ...]\n" \
             "  An argument of '-' will expand to filenames read line for line on standard input."
     parser = OptionParser(usage=usage)
     parser.add_option("-L", "--no-links", action="store_false",
