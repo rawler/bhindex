@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os, os.path as path, sys
-from ConfigParser import ConfigParser
+from ConfigParser import ConfigParser,NoOptionError
 import subprocess
 
 HERE = path.dirname(__file__)
@@ -12,8 +12,13 @@ import db, config, export_txt, export_links
 
 config = config.read()
 
-bh_bindir = path.expanduser(config.get('BITHORDE', 'bindir'))
-bh_upload_bin = path.join(bh_bindir, 'bhupload')
+try:
+  bh_bindir = config.get('BITHORDE', 'bindir')
+  bh_bindir = path.expanduser(bh_bindir)
+  os.environ['PATH'] = "%s:%s" % (bh_bindir, os.environ['PATH'])
+except NoOptionError:
+  pass
+bh_upload_bin = 'bhupload'
 
 def sanitizedpath(file):
     '''Assumes path is normalized through path.normpath first,
