@@ -11,7 +11,6 @@ sys.path.append(HERE)
 import db, config
 config = config.read()
 
-LINKDIR = config.get('LINKSEXPORT', 'linksdir')
 TXTPATH = config.get('TXTSYNC', 'exportpath')
 
 def main():
