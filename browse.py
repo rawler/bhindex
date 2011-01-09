@@ -4,7 +4,7 @@
 from PyQt4 import QtGui, uic, QtCore
 from PyQt4.QtCore import Qt
 
-import os, os.path as path, sys, time
+import os, os.path as path, sys, time, signal
 from ConfigParser import ConfigParser
 from optparse import OptionParser
 import subprocess
@@ -62,8 +62,6 @@ class Asset:
     def count(self):
         return 0
 
-import traceback
-
 class AssetFolderModel(QtCore.QAbstractItemModel):
     def __init__(self, parent, db):
         self._db = db
@@ -119,12 +117,21 @@ class AssetFolderModel(QtCore.QAbstractItemModel):
     def path(self):
         return self._path
 
-def populate(thisdb, list, root=[]):
-    for folder, count in thisdb.dir("path", root).iteritems():
-        item = FolderItem(list, folder)
-        if count > 1:
-            populate(thisdb, item, root+[folder])
-        list.appendRow(item)
+class PreviewWidget(QtGui.QWidget):
+    def __init__(self, parent):
+        QtGui.QWidget.__init__(self, parent)
+        layout = QtGui.QVBoxLayout(self)
+        self.name = QtGui.QLabel(self)
+        self.path = QtGui.QLabel(self)
+        layout.addWidget(self.name)
+        layout.addWidget(self.path)
+        layout.addItem(QtGui.QSpacerItem(20, 259, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding))
+        self.setLayout(layout)
+
+    def update(self, idx):
+        item = idx.internalPointer()
+        self.name.setText(item.name)
+        self.path.setText("/"+"/".join(item.path[:-1]))
 
 if __name__=='__main__':
     parser = OptionParser(usage="usage: %prog [options] <PATH>")
@@ -144,10 +151,16 @@ if __name__=='__main__':
     thisdb = db.open(config)
 
     app = QtGui.QApplication(sys.argv)
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
     mainwindow = uic.loadUi("browse.ui")
     mainwindow.show()
     model = AssetFolderModel(mainwindow, thisdb)
 
+    preview = PreviewWidget(None)
+
     mainwindow.columnView.setModel(model)
-    app.exec_()
+    mainwindow.columnView.updatePreviewWidget.connect(preview.update)
+    mainwindow.columnView.setPreviewWidget(preview)
+    sys.exit(app.exec_())
 
