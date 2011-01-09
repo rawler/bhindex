@@ -102,7 +102,7 @@ class DB(object):
             assert attr == "path", "Sorry, only path supported ATM."
             if isinstance(val, (list,tuple)):
                 val = "/".join(val)
-            criteria[attr] = "dn:"+val
+            criteria[attr] = "dn:"+val+"/"
         for k,v in self.db.iteritems():
             match = True
             for attr, val in criteria.iteritems():
