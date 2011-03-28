@@ -29,12 +29,21 @@ def main(check_timestamp=False):
             continue
         if check_timestamp and (v.timestamp < check_timestamp):
             continue
-        if path.lexists(dst):
+        tgt = path.join(BHFUSEDIR, str(v))
+        try:
+            oldtgt = os.readlink(dst)
+        except OSError:
+            oldtgt = None
+
+        if oldtgt == tgt:
+            continue
+        elif oldtgt: 
             os.unlink(dst)
+
         dstdir = path.dirname(dst)
         if not path.exists(dstdir):
             os.makedirs(dstdir)
-        os.symlink(path.join(BHFUSEDIR, str(v)), dst)
+        os.symlink(tgt, dst)
 
     with open(TIMEREF, 'a'):
         os.utime(TIMEREF, None)
