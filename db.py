@@ -7,6 +7,8 @@ from urllib import quote_plus as urlquote
 import cPickle as pickle
 import time
 
+import bithorde
+
 def path_str2lst(str):
     return [x for x in str.split("/") if x]
 
@@ -18,6 +20,14 @@ class Asset(object):
         self.name = name
         self.hashIds = dict([id.rsplit(':', 1) for id in hashIds])
         self.timestamp = time.time()
+
+    def bithordeHashIds(self):
+        map = {
+            'urn:tree:tiger' : bithorde.message.TREE_TIGER,
+            'urn:sha1' : bithorde.message.SHA1,
+            'urn:ed2k' : bithorde.message.ED2K,
+        }
+        return dict([(map[k], bithorde.b32decode(v)) for k,v in self.hashIds.iteritems()])
 
     def magnetURL(self, name=None):
         # Generate name
