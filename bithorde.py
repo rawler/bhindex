@@ -15,7 +15,7 @@ class BitHordeClient(bithorde.Client):
             try: reactor.stop()
             except: pass
 
-    def onConnectionFailed(self, reason):
+    def onFailed(self, reason):
         print "Failed to connect to BitHorde; '%s'" % reason
         reactor.stop()
 
