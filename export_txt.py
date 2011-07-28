@@ -25,19 +25,10 @@ def main():
         if status.status == bithorde.message.SUCCESS:
             outfile.write("%s\n"%db_asset.magnetURL(name))
 
-    def onClientConnected(client, assetIds):
-        ai = bithorde.AssetIterator(client, assetIds, onStatusUpdate, whenDone)
-
-    def onClientFailed(reason):
-        print "Failed to connect to BitHorde; '%s'" % reason
-        bithorde.reactor.stop()
-
-    def whenDone():
-        bithorde.reactor.stop()
-
     assets = (((k,v),v.bithordeHashIds()) for k,v in DB.iteritems('dn:'))
 
-    bithorde.connectUNIX(UNIXSOCKET, onClientConnected, onClientFailed, assets)
+    client = bithorde.BitHordeClient(assets, onStatusUpdate)
+    bithorde.connectUNIX(UNIXSOCKET, client)
     bithorde.reactor.run()
 
     outfile.close()

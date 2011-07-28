@@ -19,20 +19,6 @@ UNIXSOCKET = config.get('BITHORDE', 'unixsocket')
 
 DB = db.open(config)
 
-def onStatusUpdate(asset, status, key):
-    if status.status == bithorde.message.SUCCESS:
-        DB.merge(key)
-
-def onClientConnected(client, assetIds):
-    ai = bithorde.AssetIterator(client, assetIds, onStatusUpdate, whenDone)
-
-def onClientFailed(reason):
-    print "Failed to connect to BitHorde; '%s'" % reason
-    bithorde.reactor.stop()
-
-def whenDone():
-    bithorde.reactor.stop()
-
 def assets():
     for imp in IMPORTS:
         url = config.get('txt_'+imp, 'url')
@@ -43,7 +29,12 @@ def assets():
                 yield asset, asset.bithordeHashIds()
         input.close()
 
-bithorde.connectUNIX(UNIXSOCKET, onClientConnected, onClientFailed, assets())
+def onStatusUpdate(asset, status, key):
+    if status.status == bithorde.message.SUCCESS:
+        DB.merge(key)
+
+client = bithorde.BitHordeClient(assets(), onStatusUpdate)
+bithorde.connectUNIX(UNIXSOCKET, client)
 bithorde.reactor.run()
 
 DB.commit()
