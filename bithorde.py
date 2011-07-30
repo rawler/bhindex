@@ -1,13 +1,17 @@
 import pyhorde.bithorde as bithorde
 from pyhorde.bithorde import connectUNIX, reactor, message, b32decode
 
+import config
+
 class BitHordeClient(bithorde.Client):
     def __init__(self, assets, onStatusUpdate):
         self.assets = assets
         self.onStatusUpdate = onStatusUpdate
 
     def onConnected(self):
-        self.ai = bithorde.AssetIterator(self, self.assets, self.onStatusUpdate, self.whenDone)
+        conf = config.read()
+        pressure = int(conf.get('BITHORDE', 'pressure'))
+        self.ai = bithorde.AssetIterator(self, self.assets, self.onStatusUpdate, self.whenDone, parallel=pressure)
 
     def onDisconnected(self, reason):
         if not self.closed:

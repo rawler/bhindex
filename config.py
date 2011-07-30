@@ -13,6 +13,7 @@ CONFIG_DEFAULTS = {
     "BITHORDE": {
         "fusedir": "/tmp/bhfuse",
         "unixsocket": "/tmp/bithorde",
+        "pressure": "10",
     },
 }
 
