@@ -54,8 +54,9 @@ class Folder:
 
         name, count = self._sort[i]
         if not self._children[name]:
-            if self._db.by_name('/'.join(self.path+[name,])):
-                self._children[name] = Asset(self._db, self, name)
+            db_item = self._db.by_name('/'.join(self.path+[name,])) 
+            if db_item:
+                self._children[name] = Asset(self._db, self, name, db_item)
             else:
                 self._children[name] = Folder(self._db, self, name, i)
         return self._children[name]
@@ -66,14 +67,13 @@ class Folder:
         return len(self._sort)
 
 class Asset:
-    def __init__(self, db, parent, name):
+    def __init__(self, db, parent, name, db_item):
         self._db = db
         self.name = name
         self.parent = parent
         self.path = parent.path + [name]
         self.idx = None
-
-        print self._db.by_name('/'.join(self.path))
+        self.db_item = db_item
 
     def count(self):
         return 0
@@ -85,6 +85,7 @@ class AssetFolderModel(QtCore.QAbstractItemModel):
         self._root = Folder(self._db, None, [], 0)
         self._root.parent = self._root
         self._root.idx = QtCore.QModelIndex()
+        self.setSupportedDragActions(Qt.LinkAction)
 
     def rowCount(self, idx):
         if idx.isValid():
@@ -105,7 +106,23 @@ class AssetFolderModel(QtCore.QAbstractItemModel):
             return None
 
     def flags(self, idx):
-        return Qt.ItemIsEnabled or Qt.ItemIsSelectable
+        node = idx.internalPointer()
+        res = Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        if node.count() == 0:
+            res |= Qt.ItemIsDragEnabled
+        return res
+
+    def mimeData(self, indexes):
+        node = indexes[0].internalPointer()
+        if hasattr(node, 'db_item'):
+           mimeData = QtCore.QMimeData();
+           bhfuse = config.get('BITHORDE', 'fusedir')
+           f = os.path.join(bhfuse, node.db_item.magnetURL())
+           mimeData.setUrls([QtCore.QUrl(f)])
+           return mimeData
+        else:
+           return None
+   
 
     def index(self, row, column, parent):
         if not self.hasIndex(row, column, parent):
@@ -182,6 +199,8 @@ if __name__=='__main__':
 
     preview = PreviewWidget(None)
 
+    mainwindow.columnView.setDragEnabled(True)
+    mainwindow.columnView.setDragDropMode(QtGui.QAbstractItemView.DragOnly)
     mainwindow.columnView.setModel(model)
     mainwindow.columnView.updatePreviewWidget.connect(preview.update)
     mainwindow.columnView.setPreviewWidget(preview)
