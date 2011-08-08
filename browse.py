@@ -16,10 +16,11 @@ import db, config
 config = config.read()
 
 class Folder:
-    def __init__(self, db, parent, name):
+    def __init__(self, db, parent, name, row):
         self._db = db
         self.name = name
         self.parent = parent
+        self.row = row
         if parent:
             self.path = parent.path + [name]
         else:
@@ -38,12 +39,12 @@ class Folder:
         if not self._sort:
             self._scan()
 
-        name = self._sort[i][0]
+        name, count = self._sort[i]
         if not self._children[name]:
-            if self._sort[i][1] > 0:
-                self._children[name] = Folder(self._db, self, name)
-            else:
+            if self._db.by_name('/'.join(self.path+[name,])):
                 self._children[name] = Asset(self._db, self, name)
+            else:
+                self._children[name] = Folder(self._db, self, name, i)
         return self._children[name]
 
     def count(self):
@@ -59,6 +60,8 @@ class Asset:
         self.path = parent.path + [name]
         self.idx = None
 
+        print self._db.by_name('/'.join(self.path))
+
     def count(self):
         return 0
 
@@ -66,14 +69,16 @@ class AssetFolderModel(QtCore.QAbstractItemModel):
     def __init__(self, parent, db):
         self._db = db
         QtCore.QAbstractItemModel.__init__(self, parent)
-        self._root = Folder(self._db, None, [])
+        self._root = Folder(self._db, None, [], 0)
+        self._root.parent = self._root
+        self._root.idx = QtCore.QModelIndex()
 
     def rowCount(self, idx):
         if idx.isValid():
-            folder = idx.internalPointer()
+            node = idx.internalPointer()
         else:
-            folder = self._root
-        return folder.count()
+            node = self._root
+        return node.count()
 
     def columnCount(self, idx):
         return 1
@@ -90,32 +95,33 @@ class AssetFolderModel(QtCore.QAbstractItemModel):
         return Qt.ItemIsEnabled or Qt.ItemIsSelectable
 
     def index(self, row, column, parent):
-        if parent.isValid():
-            folder = parent.internalPointer()
-        else:
-            folder = self._root
-
-        # Find child
-        obj = folder.item(row)
-
-        # Cache Qt-Index
-        if not obj.idx:
-            obj.idx = self.createIndex(row, column, obj)
-
-        return obj.idx
-
-    def parent(self, idx):
-        assert idx.isValid()
-        folder = idx.internalPointer()
-        assert folder
-        assert folder.idx
-        if folder.parent is not self._root:
-            return folder.parent.idx
-        else:
+        if not self.hasIndex(row, column, parent):
             return QtCore.QModelIndex()
 
-    def path(self):
-        return self._path
+        if parent.isValid():
+            parentItem = parent.internalPointer()
+        else:
+            parentItem = self._root
+
+        # Find child
+        obj = parentItem.item(row)
+
+        # Cache Qt-Index
+        if obj:
+            return self.createIndex(row, column, obj)
+        else:
+            return QModelIndex()
+
+    def parent(self, idx):
+        if not idx.isValid():
+            return QtCore.QModelIndex()
+        child = idx.internalPointer()
+        parent = child.parent
+        assert child
+        if (parent is self._root):
+            return QtCore.QModelIndex()
+        else:
+            return self.createIndex(parent.row, 0, parent)
 
 class PreviewWidget(QtGui.QWidget):
     def __init__(self, parent):
