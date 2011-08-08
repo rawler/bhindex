@@ -15,6 +15,19 @@ sys.path.append(HERE)
 import db, config
 config = config.read()
 
+PREVIEW_STYLESHEET = """
+#preview {
+  min-width: 500px;
+  padding: 18px 18px 5px 18px;
+}
+
+#assetName {
+  font-size: 18px;
+  min-width: 500px;
+}
+
+"""
+
 class Folder:
     def __init__(self, db, parent, name, row):
         self._db = db
@@ -123,16 +136,20 @@ class AssetFolderModel(QtCore.QAbstractItemModel):
         else:
             return self.createIndex(parent.row, 0, parent)
 
-class PreviewWidget(QtGui.QWidget):
+class PreviewWidget(QtGui.QFrame):
     def __init__(self, parent):
         QtGui.QWidget.__init__(self, parent)
         layout = QtGui.QVBoxLayout(self)
+        self.setObjectName("preview")
         self.name = QtGui.QLabel(self)
+	self.name.setObjectName("assetName")
         self.path = QtGui.QLabel(self)
+	self.path.objectName = "assetPath"
         layout.addWidget(self.name)
         layout.addWidget(self.path)
         layout.addItem(QtGui.QSpacerItem(20, 259, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding))
         self.setLayout(layout)
+        self.setStyleSheet(PREVIEW_STYLESHEET)
 
     def update(self, idx):
         item = idx.internalPointer()
