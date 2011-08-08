@@ -8,4 +8,5 @@
 /bhindex.db
 /my.config
 
-
+# Ignore test-directory for links
+/bhlinks
