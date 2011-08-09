@@ -8,7 +8,7 @@ DEFAULT_CONFIG = path.join(HERE, 'my.config')
 
 CONFIG_DEFAULTS = {
     "DB": {
-        "file": "bhindex.sqlite",
+        "file": path.join(HERE,"bhindex.sqlite"),
     },
     "BITHORDE": {
         "fusedir": "/tmp/bhfuse",

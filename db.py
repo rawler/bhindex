@@ -15,6 +15,8 @@ def path_lst2str(list):
     return "/".join(list)
 
 ANY = object()
+class Starts(unicode):
+    pass
 
 class ValueSet(set):
     def __init__(self, v, t):
@@ -90,6 +92,8 @@ def create_DB(conn):
 
 class DB(object):
     ANY = ANY
+    Starts = Starts
+
     def __init__(self, config):
         self.conn = sqlite3.connect(config.get('DB', 'file'))
         create_DB(self.conn)
@@ -121,11 +125,13 @@ class DB(object):
     def query(self, criteria):
         ids = None
         match_query = """SELECT DISTINCT objid FROM map JOIN list ON (map.listid = list.id)
-                         WHERE map.key = ? AND list.value = ?"""
+                         WHERE map.key = ? AND list.value LIKE ?"""
         any_query = """SELECT DISTINCT objid FROM map WHERE key = ?"""
         for k,v in criteria.iteritems():
             if v is ANY:
                 objs = self._query_all(any_query, (k,))
+            elif isinstance(v, Starts):
+                objs = self._query_all(match_query, (k,v+"%"))
             else:
                 objs = self._query_all(match_query, (k,v))
 
@@ -166,20 +172,20 @@ class DB(object):
         assert attr not in criteria
         result = dict()
         if prefix:
-            criteria[attr] = prefix
+            criteria[attr] = Starts('/'.join(prefix))
             plen = len(prefix)
         else:
+            criteria[attr] = self.ANY
             plen = 0
 
-        for k,v in self.query(criteria):
-            if not k.startswith("dn:"):
-                continue
-            k = path_str2lst(k[3:])
-            k = k[plen]
-            if k in result:
-                result[k] += 1
-            else:
-                result[k] = 1
+        for obj in self.query(criteria):
+            for k in obj[attr]:
+                k = path_str2lst(k)
+                k = k[plen]
+                if k in result:
+                    result[k] += 1
+                else:
+                    result[k] = 1
 
         return result
 

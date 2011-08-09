@@ -54,15 +54,15 @@ class Folder:
 
         name, count = self._sort[i]
         if not self._children[name]:
-            db_item = self._db.by_name('/'.join(self.path+[name,])) 
-            if db_item:
-                self._children[name] = Asset(self._db, self, name, db_item)
+            db_item = [x for x in self._db.query({'path': '/'.join(self.path+[name,])})]
+            if len(db_item) == 1:
+                self._children[name] = Asset(self._db, self, name, db_item[0])
             else:
                 self._children[name] = Folder(self._db, self, name, i)
         return self._children[name]
 
     def count(self):
-        if not self._sort:
+        if self._sort is None:
             self._scan()
         return len(self._sort)
 
@@ -122,7 +122,6 @@ class AssetFolderModel(QtCore.QAbstractItemModel):
            return mimeData
         else:
            return None
-   
 
     def index(self, row, column, parent):
         if not self.hasIndex(row, column, parent):
@@ -159,9 +158,9 @@ class PreviewWidget(QtGui.QFrame):
         layout = QtGui.QVBoxLayout(self)
         self.setObjectName("preview")
         self.name = QtGui.QLabel(self)
-	self.name.setObjectName("assetName")
+        self.name.setObjectName("assetName")
         self.path = QtGui.QLabel(self)
-	self.path.objectName = "assetPath"
+        self.path.objectName = "assetPath"
         layout.addWidget(self.name)
         layout.addWidget(self.path)
         layout.addItem(QtGui.QSpacerItem(20, 259, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding))
