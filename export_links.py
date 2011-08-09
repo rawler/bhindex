@@ -32,7 +32,6 @@ def main(check_timestamp=False):
                 print "Warning! %s tries to break out of directory!"
                 continue
 
-            print asset
             tgt = path.join(BHFUSEDIR, magnet.fromDbObject(asset))
             try:
                 oldtgt = os.readlink(dst)

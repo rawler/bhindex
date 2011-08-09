@@ -18,5 +18,5 @@ def parse(magnetLink):
                 return attrs
     return False
 
-def fromDbObject(d):
-    return "magnet:?xt=urn:%s" % d['xt'].any()
+def fromDbObject(o):
+    return "magnet:?xt=urn:%s" % o['xt'].any()

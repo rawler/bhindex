@@ -17,51 +17,54 @@ def path_lst2str(list):
 ANY = object()
 
 class ValueSet(set):
-    def __init__(self, v=[], t=None):
-        if isinstance(v, basestring):
+    def __init__(self, v, t):
+        if isinstance(v, unicode):
             set.__init__(self, [v])
         else:
             set.__init__(self, v)
+            for x in self:
+                assert isinstance(x, unicode)
         self.t = t
 
     def any(self):
         for x in self:
             return x
 
-class Object(dict):
+class Object(object):
     def __init__(self, objid, init={}):
         self.id = objid
-        self.dirty = set()
+        self._dirty = set()
+        self._dict = dict()
         self.update(init)
-
-    def _update(self, key, value):
-        dict.__setitem__(self, key, value)
 
     def update(self, other):
         for k,v in other.iteritems():
             self[k] = v
 
-    def __do_set(self, key, value):
-        assert isinstance(key, unicode)
-        for v in value:
-            assert isinstance(v, unicode)
-
-        if key not in self or self[key] != value:
-            self.dirty.add(key)
-            dict.__setitem__(self, key, value)
+    def __getitem__(self, key):
+        return self._dict[key]
 
     def __setitem__(self, key, value):
-        value = ValueSet(value)
-        self.__do_set(key, value)
+        assert isinstance(key, unicode)
+        assert isinstance(value, ValueSet)
 
-    def add(self, key, value):
-        value = ValueSet(value)
-        if key in self:
-            value.update(self[key])
-        self.__do_set(key, value)
+        if key not in self._dict or (value.t >= self._dict[key].t and self._dict[key] != value):
+            self._dirty.add(key)
+            self._dict[key] = value
+
+    def iteritems(self):
+        return self._dict.iteritems()
+
+    def update_if_newer(self, key, value):
+        assert isinstance(value, ValueSet)
+        if key not in self or self[key].t < value.t:
+            self.__do_set(key, value)
 
     def timestamp(self):
-        return max(x.t for x in self.itervalues())
+        return max(x.t for x in self._dict.itervalues())
+
+    def __repr__(self):
+        return repr(self._dict)
 
 def create_DB(conn):
     conn.executescript("""
@@ -86,6 +89,7 @@ def create_DB(conn):
     """)
 
 class DB(object):
+    ANY = ANY
     def __init__(self, config):
         self.conn = sqlite3.connect(config.get('DB', 'file'))
         create_DB(self.conn)
@@ -110,8 +114,8 @@ class DB(object):
     def __getitem__(self, objid):
         obj = Object(objid)
         for key, timestamp, listid in self._query_all("SELECT key, timestamp, listid FROM map WHERE objid = ?", (objid,)):
-            values = ValueSet((x for x, in self._query_all("SELECT value FROM list WHERE id = ?", (listid,))), t=timestamp)
-            obj._update(key, values)
+            values = ValueSet(v=(x for x, in self._query_all("SELECT value FROM list WHERE id = ?", (listid,))), t=timestamp)
+            obj._dict[key] = values
         return obj
 
     def query(self, criteria):
@@ -139,13 +143,13 @@ class DB(object):
 
     def merge(self, obj):
         objid = obj.id
-        for key in obj.dirty:
+        for key in obj._dirty:
             newlistid = self._query_single("SELECT MAX(id)+1 FROM list") or 1
             c = self.conn.executemany("INSERT INTO list (id, value) VALUES (?, ?)", ((newlistid, value) for value in obj[key]))
             self.conn.execute("""INSERT OR REPLACE INTO map (objid, key, timestamp, listid)
-                                VALUES (?, ?, strftime('%s','now'), ?)""", 
-                                (objid, key, newlistid))
-        obj.dirty.clear()
+                                VALUES (?, ?, ?, ?)""", 
+                                (objid, key, obj[key].t, newlistid))
+        obj._dirty.clear()
 
     def commit(self):
         self.conn.commit()
@@ -188,13 +192,13 @@ if __name__ == '__main__':
 
     obj = db['myasset']
     obj['name'] = 'monkeyman'
-    print "Yeah, I got", str(obj), obj.dirty
+    print "Yeah, I got", str(obj), obj._dirty
 
     db.merge(obj)
-    print "Yeah, I got", str(obj), obj.dirty
+    print "Yeah, I got", str(obj), obj._dirty
 
     obj = db['myasset']
-    print "Yeah, I got", str(obj), obj.dirty
+    print "Yeah, I got", str(obj), obj._dirty
 
     for obj in db.query({'name': 'monkeyman'}):
         print obj
