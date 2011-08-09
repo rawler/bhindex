@@ -1,7 +1,4 @@
 # -*- coding: utf-8 -*-
-import anydbm
-
-from ConfigParser import ConfigParser
 from urlparse import urlparse, parse_qs
 from urllib import quote_plus as urlquote
 import cPickle as pickle
@@ -9,117 +6,154 @@ import time
 
 import bithorde
 
+import sqlite3
+
 def path_str2lst(str):
     return [x for x in str.split("/") if x]
 
 def path_lst2str(list):
     return "/".join(list)
 
-class Asset(object):
-    def __init__(self, name, hashIds):
-        self.name = name
-        self.hashIds = dict([id.rsplit(':', 1) for id in hashIds])
-        self.timestamp = time.time()
+ANY = object()
 
-    def bithordeHashIds(self):
-        map = {
-            'urn:tree:tiger' : bithorde.message.TREE_TIGER,
-            'urn:sha1' : bithorde.message.SHA1,
-            'urn:ed2k' : bithorde.message.ED2K,
-        }
-        return dict([(map[k], bithorde.b32decode(v)) for k,v in self.hashIds.iteritems()])
+class ValueSet(set):
+    def __init__(self, v=[], t=None):
+        if isinstance(v, basestring):
+            set.__init__(self, [v])
+        else:
+            set.__init__(self, v)
+        self.t = t
 
-    def magnetURL(self, name=None):
-        # Generate name
-        if not name: name = self.name or ''
-        if name: name = 'dn=%s&' % urlquote(name)
+    def any(self):
+        for x in self:
+            return x
 
-        # Merge with hashIds
-        return "magnet:?%s%s" % (name, '&'.join(['xt=%s:%s'%(k,v) for k,v in self.hashIds.iteritems()]))
-    __str__ = magnetURL
+class Object(dict):
+    def __init__(self, objid, init={}):
+        self.id = objid
+        self.dirty = set()
+        self.update(init)
+
+    def _update(self, key, value):
+        dict.__setitem__(self, key, value)
 
     def update(self, other):
-        if other.name and self.name != other.name:
-            self.name = other.name
-            self.timestamp = time.time()
-        if self.hashIds != other.hashIds:
-            self.hashIds.update(other.hashIds)
-            self.timestamp = time.time()
+        for k,v in other.iteritems():
+            self[k] = v
 
-    def indexes(self):
-        retval = ['%s:%s'%(k,v) for k,v in self.hashIds.iteritems()]
-        if self.name:
-            return retval+["dn:"+self.name]
-        else:
-            return retval
+    def __do_set(self, key, value):
+        assert isinstance(key, unicode)
+        for v in value:
+            assert isinstance(v, unicode)
 
-    @classmethod
-    def fromMagnet(cls, magnetURL):
-        url = urlparse(magnetURL)
-        info = parse_qs(url.path[1:])
+        if key not in self or self[key] != value:
+            self.dirty.add(key)
+            dict.__setitem__(self, key, value)
 
-        if 'dn' in info:  name = info['dn'][0]
-        else:             name = None
+    def __setitem__(self, key, value):
+        value = ValueSet(value)
+        self.__do_set(key, value)
 
-        asset = cls(name, info['xt'])
+    def add(self, key, value):
+        value = ValueSet(value)
+        if key in self:
+            value.update(self[key])
+        self.__do_set(key, value)
 
-        return asset
+    def timestamp(self):
+        return max(x.t for x in self.itervalues())
+
+def create_DB(conn):
+    conn.executescript("""
+    CREATE TABLE IF NOT EXISTS map (
+        objid TEXT NOT NULL,
+        key TEXT NOT NULL,
+        timestamp INT NOT NULL,
+        listid INTEGER,
+        PRIMARY KEY (objid, key)
+    );
+    CREATE INDEX IF NOT EXISTS map_obj ON map (objid);
+    CREATE INDEX IF NOT EXISTS map_key ON map (key);
+    CREATE INDEX IF NOT EXISTS map_list ON map (listid);
+
+    CREATE TABLE IF NOT EXISTS list (
+        itemid INTEGER PRIMARY_KEY AUTO_INCREMENT,
+        id INTEGER NOT NULL,
+        value TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS list_id ON list (id);
+    CREATE INDEX IF NOT EXISTS list_value ON list (value);
+    """)
 
 class DB(object):
     def __init__(self, config):
-        self.db = anydbm.open(config.get('DB', 'file'), 'c')
+        self.conn = sqlite3.connect(config.get('DB', 'file'))
+        create_DB(self.conn)
 
-    def __getitem__(self, key):
-        return pickle.loads(self.db[key])
+    def _query_all(self, query, args):
+        c = self.conn.cursor()
+        c.execute(query, args)
+        return c.fetchall()
 
-    def by_name(self, name):
-        try:
-            return self['dn:'+name]
-        except KeyError:
-            return None
+    def _query_first(self, query, args):
+        c = self.conn.cursor()
+        c.execute(query, args)
+        return c.fetchone()
 
-    def merge(self, asset):
-        if isinstance(asset, basestring):
-            asset = Asset.fromMagnet(asset)
-        idxs = [str(x) for x in asset.indexes()]
-        for idx in idxs:
-            try: oldAsset = self[idx]
-            except KeyError: pass
+    def _query_single(self, query, args=[], default=None):
+        res = self._query_first(query, args)
+        if res:
+            return res[0]
+        else:
+            return default
+
+    def __getitem__(self, objid):
+        obj = Object(objid)
+        for key, timestamp, listid in self._query_all("SELECT key, timestamp, listid FROM map WHERE objid = ?", (objid,)):
+            values = ValueSet((x for x, in self._query_all("SELECT value FROM list WHERE id = ?", (listid,))), t=timestamp)
+            obj._update(key, values)
+        return obj
+
+    def query(self, criteria):
+        ids = None
+        match_query = """SELECT DISTINCT objid FROM map JOIN list ON (map.listid = list.id)
+                         WHERE map.key = ? AND list.value = ?"""
+        any_query = """SELECT DISTINCT objid FROM map WHERE key = ?"""
+        for k,v in criteria.iteritems():
+            if v is ANY:
+                objs = self._query_all(any_query, (k,))
             else:
-                if oldAsset:
-                    oldAsset.update(asset)
-                    asset = oldAsset
-        for idx in idxs:
-            self.db[idx] = pickle.dumps(asset)
+                objs = self._query_all(match_query, (k,v))
+
+            if ids is None:
+                ids = set(x for x, in objs)
+            else:
+                ids.intersection_update(x for x, in objs)
+
+        for objid in ids:
+            yield self[objid]
+
+    def all(self):
+        for objid, in self._query_all('SELECT DISTINCT objid FROM map', ()):
+            yield self[objid]
+
+    def merge(self, obj):
+        objid = obj.id
+        for key in obj.dirty:
+            newlistid = self._query_single("SELECT MAX(id)+1 FROM list") or 1
+            c = self.conn.executemany("INSERT INTO list (id, value) VALUES (?, ?)", ((newlistid, value) for value in obj[key]))
+            self.conn.execute("""INSERT OR REPLACE INTO map (objid, key, timestamp, listid)
+                                VALUES (?, ?, strftime('%s','now'), ?)""", 
+                                (objid, key, newlistid))
+        obj.dirty.clear()
 
     def commit(self):
-        self.db.sync()
+        self.conn.commit()
 
-    def iteritems(self, prefix=""):
-        for k,v in self.db.iteritems():
-            if k.startswith(prefix):
-                yield k[len(prefix):], pickle.loads(v)
-
-    def filter(self, **criteria):
-        '''Allows iteration of selected items. The filter-criteria is specified using
-        "prop=val"-kwargs. The value is compared using startswith.
-
-        @example:
-          for asset in db.filter(path='trailers') # Will match "trailers*"
-             print asset
-        '''
-        for attr, val in criteria.iteritems():
-            assert attr == "path", "Sorry, only path supported ATM."
-            if isinstance(val, (list,tuple)):
-                val = "/".join(val)
-            criteria[attr] = "dn:"+val+"/"
-        for k,v in self.db.iteritems():
-            match = True
-            for attr, val in criteria.iteritems():
-                if not k.startswith(val):
-                    match = False
-            if match:
-                yield k, pickle.loads(v)
+    def vacuum(self):
+        #for x, in self._query_all("SELECT DISTINCT list.id FROM list LEFT JOIN map ON (map.listid = list.id) WHERE map.listid IS NULL", ()):
+            #self.conn.execute("DELETE FROM list WHERE list.id = ?", (x,))
+        pass
 
     def dir(self, attr, prefix=[], **criteria):
         '''Return the sub-partitions of attr from items in DB. I.E. for a DB containing
@@ -133,7 +167,7 @@ class DB(object):
         else:
             plen = 0
 
-        for k,v in self.filter(**criteria):
+        for k,v in self.query(criteria):
             if not k.startswith("dn:"):
                 continue
             k = path_str2lst(k[3:])
@@ -147,3 +181,22 @@ class DB(object):
 
 def open(config):
     return DB(config)
+
+if __name__ == '__main__':
+    import config
+    db = DB(config.read())
+
+    obj = db['myasset']
+    obj['name'] = 'monkeyman'
+    print "Yeah, I got", str(obj), obj.dirty
+
+    db.merge(obj)
+    print "Yeah, I got", str(obj), obj.dirty
+
+    obj = db['myasset']
+    print "Yeah, I got", str(obj), obj.dirty
+
+    for obj in db.query({'name': 'monkeyman'}):
+        print obj
+
+    db.commit()

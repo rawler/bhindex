@@ -9,7 +9,7 @@ import subprocess
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config
+import db, config, magnet
 config = config.read()
 
 LINKDIR = path.normpath(config.get('LINKSEXPORT', 'linksdir'))
@@ -22,28 +22,32 @@ def main(check_timestamp=False):
     if check_timestamp == True:
         check_timestamp = path.exists(TIMEREF) and path.getmtime(TIMEREF)
 
-    for k,v in DB.iteritems('dn:'):
-        dst = path.normpath(path.join(LINKDIR, k))
-        if not dst.startswith(LINKDIR):
-            print "Warning! %s tries to break out of directory!"
+    for asset in DB.query({'path': db.ANY, 'name': db.ANY, 'xt': db.ANY}):
+        if check_timestamp and (asset.timestamp() < check_timestamp):
             continue
-        if check_timestamp and (v.timestamp < check_timestamp):
-            continue
-        tgt = path.join(BHFUSEDIR, str(v))
-        try:
-            oldtgt = os.readlink(dst)
-        except OSError:
-            oldtgt = None
 
-        if oldtgt == tgt:
-            continue
-        elif oldtgt: 
-            os.unlink(dst)
+        for p in asset['path']:
+            dst = path.normpath(path.join(LINKDIR, p))
+            if not dst.startswith(LINKDIR):
+                print "Warning! %s tries to break out of directory!"
+                continue
 
-        dstdir = path.dirname(dst)
-        if not path.exists(dstdir):
-            os.makedirs(dstdir)
-        os.symlink(tgt, dst)
+            print asset
+            tgt = path.join(BHFUSEDIR, magnet.fromDbObject(asset))
+            try:
+                oldtgt = os.readlink(dst)
+            except OSError:
+                oldtgt = None
+
+            if oldtgt == tgt:
+                continue
+            elif oldtgt: 
+                os.unlink(dst)
+
+            dstdir = path.dirname(dst)
+            if not path.exists(dstdir):
+                os.makedirs(dstdir)
+            os.symlink(tgt, dst)
 
     with open(TIMEREF, 'a'):
         os.utime(TIMEREF, None)

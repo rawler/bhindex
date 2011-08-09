@@ -10,7 +10,7 @@ import bithorde
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config
+import db, config, magnet
 config = config.read()
 
 LINKDIR = config.get('LINKSEXPORT', 'linksdir')
@@ -25,8 +25,15 @@ def assets():
         input = urllib2.urlopen(url)
         for line in input:
             if line.startswith('magnet:'):
-                asset = db.Asset.fromMagnet(line.strip())
-                yield asset, asset.bithordeHashIds()
+                x = magnet.parse(line.strip().decode('utf8'))
+                if x:
+                    asset = DB[x['xt']]
+                    asset.add(u'path', x['path'])
+                    asset.add(u'name', x['name'])
+                    asset.add(u'filetype', x['filetype'])
+                    assert asset.id.startswith(magnet.XT_PREFIX_TIGER)
+                    tigerhash = bithorde.b32decode(asset.id[len(magnet.XT_PREFIX_TIGER):])
+                    yield asset, {bithorde.message.TREE_TIGER: tigerhash}
         input.close()
 
 def onStatusUpdate(asset, status, key):
@@ -37,4 +44,5 @@ client = bithorde.BitHordeClient(assets(), onStatusUpdate)
 bithorde.connectUNIX(UNIXSOCKET, client)
 bithorde.reactor.run()
 
+DB.vacuum()
 DB.commit()
