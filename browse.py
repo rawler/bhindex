@@ -17,13 +17,12 @@ config = config.read()
 
 PREVIEW_STYLESHEET = """
 #preview {
-  min-width: 500px;
+  min-width: 400px;
   padding: 18px 18px 5px 18px;
 }
 
 #assetName {
   font-size: 18px;
-  min-width: 500px;
 }
 
 """
@@ -161,9 +160,14 @@ class PreviewWidget(QtGui.QFrame):
         self.name.setObjectName("assetName")
         self.path = QtGui.QLabel(self)
         self.path.objectName = "assetPath"
+        self.table = QtGui.QTableView(self)
+        self.table.objectName = "attrtable"
+        self.attrs = QtGui.QStandardItemModel(0, 2, self)
+        self.table.setModel(self.attrs)
         layout.addWidget(self.name)
         layout.addWidget(self.path)
-        layout.addItem(QtGui.QSpacerItem(20, 259, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding))
+        layout.addItem(QtGui.QSpacerItem(20, 20, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum))
+        layout.addWidget(self.table)
         self.setLayout(layout)
         self.setStyleSheet(PREVIEW_STYLESHEET)
 
@@ -171,6 +175,17 @@ class PreviewWidget(QtGui.QFrame):
         item = idx.internalPointer()
         self.name.setText(item.name)
         self.path.setText("/"+"/".join(item.path[:-1]))
+        asset = item.db_item
+        self.attrs.clear()
+        for k,v in sorted(asset.iteritems()):
+            if k == u'path':
+                continue
+            for x in v:
+                a = QtGui.QStandardItem(k)
+                a.setSelectable(False)
+                b = QtGui.QStandardItem(x)
+                b.setSelectable(False)
+                self.attrs.appendRow([a,b])
 
 if __name__=='__main__':
     parser = OptionParser(usage="usage: %prog [options] <PATH>")
