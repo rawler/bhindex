@@ -151,9 +151,88 @@ class AssetFolderModel(QtCore.QAbstractItemModel):
         else:
             return self.createIndex(parent.row, 0, parent)
 
+class FilterRule(QtGui.QWidget):
+    onChanged = QtCore.pyqtSignal()
+
+    def __init__(self, parent, db, keys):
+        QtGui.QWidget.__init__(self, parent)
+        self.db = db
+        layout = self.layout = QtGui.QVBoxLayout(self)
+
+        keybox = self.keybox = QtGui.QComboBox(self)
+        keybox.addItem('- filter key -', userData=None)
+        for key in keys:
+            keybox.addItem(key, userData=key)
+        keybox.currentIndexChanged.connect(self.onKeyChanged)
+        layout.addWidget(keybox)
+
+        valuebox = self.valuebox = QtGui.QComboBox(self)
+        self.populateValuesForKey(None)
+        valuebox.currentIndexChanged.connect(self.onChanged.emit)
+        layout.addWidget(valuebox)
+
+    def populateValuesForKey(self, key):
+        self.valuebox.clear()
+        self.valuebox.addItem('- is present -', userData=self.db.ANY)
+        if key:
+            for value in self.db.list_values(key):
+                self.valuebox.addItem(value, userData=value)
+
+    def onKeyChanged(self, idx):
+        key = unicode(self.keybox.itemData(idx).toString())
+        self.populateValuesForKey(key)
+        self.onChanged.emit()
+
+    def getRule(self):
+        vb = self.valuebox
+        value = vb.itemData(vb.currentIndex()).toPyObject()
+        if isinstance(value, QtCore.QString):
+            value = unicode(value)
+        return self.getKey(), value
+
+    def getKey(self):
+        kb = self.keybox
+        return unicode(kb.itemData(kb.currentIndex()).toString())
+
+class FilterList(QtGui.QWidget):
+    onChanged = QtCore.pyqtSignal()
+
+    def __init__(self, parent, db):
+        QtGui.QWidget.__init__(self, parent)
+        self.db = db
+        self.keys = [k for k,c in db.list_keys() if 1 < c < 32]
+        layout = self.layout = QtGui.QVBoxLayout(self)
+        layout.addWidget(QtGui.QLabel("Filters", self))
+        layout.addStretch()
+        self.addFilter()
+
+    def addFilter(self):
+        rule = FilterRule(self, self.db, self.keys)
+        rule.onChanged.connect(self._onRuleChanged)
+        self.layout.insertWidget(self.layout.count()-1, rule)
+
+    def makeFilter(self):
+        res = {}
+        for c in self.children():
+            if isinstance(c, FilterRule):
+                k,v = c.getRule()
+                if k:
+                    res[k] = v
+        return res
+
+    def _onRuleChanged(self):
+        empty = 0
+        for c in self.children():
+            if isinstance(c, FilterRule):
+                if not c.getKey():
+                    empty += 1
+        if not empty:
+            self.addFilter()
+        self.onChanged.emit()
+
 class PreviewWidget(QtGui.QFrame):
     def __init__(self, parent):
-        QtGui.QWidget.__init__(self, parent)
+        QtGui.QFrame.__init__(self, parent)
         layout = QtGui.QVBoxLayout(self)
         self.setObjectName("preview")
         self.name = QtGui.QLabel(self)
@@ -209,6 +288,16 @@ if __name__=='__main__':
 
     mainwindow = uic.loadUi("browse.ui")
     mainwindow.show()
+
+    def onFilterChanged():
+        f = filter.makeFilter()
+        print f
+        print len([x for x in thisdb.query(f)])
+
+    filter = FilterList(mainwindow, thisdb)
+    filter.onChanged.connect(onFilterChanged)
+    mainwindow.layout.insertWidget(0, filter)
+
     model = AssetFolderModel(mainwindow, thisdb)
 
     preview = PreviewWidget(None)

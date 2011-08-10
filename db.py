@@ -46,6 +46,9 @@ class Object(object):
     def __getitem__(self, key):
         return self._dict[key]
 
+    def __contains__(self, key):
+        return key in self._dict
+
     def __setitem__(self, key, value):
         assert isinstance(key, unicode)
         assert isinstance(value, ValueSet)
@@ -147,6 +150,23 @@ class DB(object):
         for objid, in self._query_all('SELECT DISTINCT objid FROM map', ()):
             yield self[objid]
 
+    def list_keys(self):
+        '''Returns a iterator of (key, distinct values for key) for all keys in DB.'''
+        return sorted(self._query_all("""SELECT key, COUNT(*)
+    FROM (SELECT key, list.value, COUNT(*) AS c
+        FROM map
+            JOIN list ON map.listid = list.id
+        GROUP BY key, list.value)
+    GROUP BY key""", ()), key=lambda (k,c): c)
+
+    def list_values(self, key):
+        for x, in self._query_all("""SELECT DISTINCT value
+                FROM map
+                    JOIN list ON map.listid = list.id
+                WHERE map.key = ?
+                ORDER BY value""", (key,)):
+            yield x
+
     def merge(self, obj):
         objid = obj.id
         for key in obj._dirty:
@@ -197,7 +217,7 @@ if __name__ == '__main__':
     db = DB(config.read())
 
     obj = db['myasset']
-    obj['name'] = 'monkeyman'
+    obj[u'name'] = ValueSet(u'monkeyman', t=time.time())
     print "Yeah, I got", str(obj), obj._dirty
 
     db.merge(obj)
@@ -208,5 +228,8 @@ if __name__ == '__main__':
 
     for obj in db.query({'name': 'monkeyman'}):
         print obj
+
+    for k,c in db.list_keys():
+        print k,c
 
     db.commit()
