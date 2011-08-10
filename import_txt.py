@@ -10,7 +10,7 @@ import bithorde
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config, magnet
+import db, config, magnet, re
 config = config.read()
 
 LINKDIR = config.get('LINKSEXPORT', 'linksdir')
@@ -18,6 +18,25 @@ IMPORTS = config.get('TXTSYNC', 'imports').split(',')
 UNIXSOCKET = config.get('BITHORDE', 'unixsocket')
 
 DB = db.open(config)
+
+PATH_RULES = [
+    re.compile(r'(?P<category>Movies|TV)/(?!XXX)'),
+    re.compile(r'Movies/(?P<category>XXX)'),
+    re.compile(r'Movies/(?P<title>.*) \((?P<year>\d{4})\)/'),
+    re.compile(r'Movies/(?P<title>[^/]+)[. ](720p|1080p|bdrip|dvdrid|dvdr|PAL|xvid|\.)*.*/', re.I),
+    re.compile(r'TV/(?P<series>[^/]+)/Season (?P<season>\d+)/.* \d{1,2}?x(?P<episode>\d{2})'),
+]
+
+def mapPath(path, asset, t):
+    for rule in PATH_RULES:
+        m = rule.match(path)
+        if m:
+            for k, v in m.groupdict().iteritems():
+                k = unicode(k, 'utf8')
+                if k in asset:
+                    asset[k].add(v)
+                else:
+                    asset[k] = db.ValueSet(v, t)
 
 def readMagnetAssets(input):
     for line in input:
@@ -29,6 +48,9 @@ def readMagnetAssets(input):
                 asset[u'path'] = db.ValueSet(x['path'], t)
                 asset[u'name'] = db.ValueSet(x['name'], t)
                 asset[u'filetype'] = db.ValueSet(x['filetype'], t)
+                for path in x['path']:
+                    mapPath(path, asset, t)
+
                 assert asset.id.startswith(magnet.XT_PREFIX_TIGER)
                 tigerhash = bithorde.b32decode(asset.id[len(magnet.XT_PREFIX_TIGER):])
                 yield asset, {bithorde.message.TREE_TIGER: tigerhash}
