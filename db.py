@@ -93,6 +93,25 @@ def create_DB(conn):
     CREATE INDEX IF NOT EXISTS list_value ON list (value);
     """)
 
+def _sql_for_criteria(crit):
+    sql = []
+    params = []
+    match_query = """SELECT DISTINCT objid FROM map JOIN list ON (map.listid = list.id)
+                        WHERE map.key = ? AND list.value LIKE ?"""
+    any_query = """SELECT DISTINCT objid FROM map WHERE key = ?"""
+    for k,v in crit.iteritems():
+        params.append(k)
+        if v is ANY:
+            sql.append(any_query)
+        elif isinstance(v, Starts):
+            sql.append(match_query)
+            params.append(v+'%')
+        else:
+            sql.append(match_query)
+            params.append(v)
+
+    return " INTERSECT ".join(sql), params
+
 class DB(object):
     ANY = ANY
     Starts = Starts
@@ -126,38 +145,30 @@ class DB(object):
         return obj
 
     def query(self, criteria):
-        ids = None
-        match_query = """SELECT DISTINCT objid FROM map JOIN list ON (map.listid = list.id)
-                         WHERE map.key = ? AND list.value LIKE ?"""
-        any_query = """SELECT DISTINCT objid FROM map WHERE key = ?"""
-        for k,v in criteria.iteritems():
-            if v is ANY:
-                objs = self._query_all(any_query, (k,))
-            elif isinstance(v, Starts):
-                objs = self._query_all(match_query, (k,v+"%"))
-            else:
-                objs = self._query_all(match_query, (k,v))
-
-            if ids is None:
-                ids = set(x for x, in objs)
-            else:
-                ids.intersection_update(x for x, in objs)
-
-        for objid in ids:
+        for objid, in self._query_all(*_sql_for_criteria(criteria)):
             yield self[objid]
 
     def all(self):
         for objid, in self._query_all('SELECT DISTINCT objid FROM map', ()):
             yield self[objid]
 
-    def list_keys(self):
+    def list_keys(self, criteria=None):
         '''Returns a iterator of (key, distinct values for key) for all keys in DB.'''
-        return sorted(self._query_all("""SELECT key, COUNT(*)
+        query = """SELECT key, COUNT(*)
     FROM (SELECT key, list.value, COUNT(*) AS c
         FROM map
             JOIN list ON map.listid = list.id
+            %s
         GROUP BY key, list.value)
-    GROUP BY key""", ()), key=lambda (k,c): c)
+    GROUP BY key"""
+        if criteria:
+            q, args = _sql_for_criteria(criteria)
+            query %= "JOIN (%s) USING (objid)" % q
+        else:
+            query %= ""
+            args = ()
+
+        return sorted(self._query_all(query, args), key=lambda (k,c): c)
 
     def list_values(self, key):
         for x, in self._query_all("""SELECT DISTINCT value
