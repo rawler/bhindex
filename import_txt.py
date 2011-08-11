@@ -20,32 +20,34 @@ UNIXSOCKET = config.get('BITHORDE', 'unixsocket')
 DB = db.open(config)
 
 PATH_RULES = [
-    re.compile(r'(?P<category>Movies|TV)/(?!XXX)'),
-    re.compile(r'Movies/(?P<category>XXX)'),
-    re.compile(r'Movies/(?P<title>.*) \((?P<year>\d{4})\)/'),
-    re.compile(r'Movies/(?!XXX)(?P<title>[^/]+)[. ](720p|1080p|bdrip|dvdrid|dvdr|PAL|xvid|\.)*.*/', re.I),
-    re.compile(r'TV/(?P<series>[^/]+)/Season (?P<season>\d+)/.* \d{1,2}?x(?P<episode>\d{2})'),
-    re.compile(r'.*(?P<quality>720p|1080p|480p|PAL|NTSC)', re.I),
+    (re.compile(r'(?P<category>Movies|TV)/(?!XXX)'), None),
+    (re.compile(r'Movies/(?P<category>XXX)'), None),
+    (re.compile(r'Movies/(?P<title>.*) \((?P<year>\d{4})\)/'), None),
+    (re.compile(r'Movies/(?!XXX)(?P<title>[^/]+)[. ](720p|1080p|bdrip|dvdrid|dvdr|PAL|xvid|\.)*.*/', re.I), None),
+    (re.compile(r'TV/(?P<series>[^/]+)/Season (?P<season>\d+)/.* \d{1,2}?x(?P<episode>\d{2})'), None),
+    (re.compile(r'.*(?P<quality>720p|1080p|480p|PAL|NTSC)', re.I), unicode.lower),
 ]
 
 def mapPath(path, asset, t):
-    for rule in PATH_RULES:
+    for rule, filter in PATH_RULES:
         m = rule.match(path)
         if m:
             for k, v in m.groupdict().iteritems():
                 k = unicode(k, 'utf8')
+                if filter:
+                    v = filter(v)
                 if k in asset:
                     asset[k].add(v)
                 else:
                     asset[k] = db.ValueSet(v, t)
 
 def readMagnetAssets(input):
+    t = time()
     for line in input:
         if line.startswith('magnet:'):
             x = magnet.parse(line.strip().decode('utf8'))
             if x:
                 asset = db.Object(x['xt'])
-                t = time()
                 asset[u'path'] = db.ValueSet(x['path'], t)
                 asset[u'name'] = db.ValueSet(x['name'], t)
                 asset[u'xt'] = db.ValueSet(x['xt'], t)
@@ -84,7 +86,7 @@ def assets():
     for imp in IMPORTS:
         url = config.get('txt_'+imp, 'url')
         formatParser = FORMATS[config.get('txt_'+imp, 'format')]
-        
+
         input = urllib2.urlopen(url)
         for asset, hash in formatParser(input):
             yield asset, hash
