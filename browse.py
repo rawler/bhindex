@@ -158,6 +158,7 @@ class Results(QtGui.QTableView):
             row = [mkItem(key) for key in keys]
             model.appendRow(row)
         self.setModel(model)
+        self.resizeColumnsToContents()
 
 class PreviewWidget(QtGui.QFrame):
     def __init__(self, parent):
