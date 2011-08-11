@@ -23,8 +23,9 @@ PATH_RULES = [
     re.compile(r'(?P<category>Movies|TV)/(?!XXX)'),
     re.compile(r'Movies/(?P<category>XXX)'),
     re.compile(r'Movies/(?P<title>.*) \((?P<year>\d{4})\)/'),
-    re.compile(r'Movies/(?P<title>[^/]+)[. ](720p|1080p|bdrip|dvdrid|dvdr|PAL|xvid|\.)*.*/', re.I),
+    re.compile(r'Movies/(?!XXX)(?P<title>[^/]+)[. ](720p|1080p|bdrip|dvdrid|dvdr|PAL|xvid|\.)*.*/', re.I),
     re.compile(r'TV/(?P<series>[^/]+)/Season (?P<season>\d+)/.* \d{1,2}?x(?P<episode>\d{2})'),
+    re.compile(r'.*(?P<quality>720p|1080p|480p|PAL|NTSC)', re.I),
 ]
 
 def mapPath(path, asset, t):
@@ -47,6 +48,7 @@ def readMagnetAssets(input):
                 t = time()
                 asset[u'path'] = db.ValueSet(x['path'], t)
                 asset[u'name'] = db.ValueSet(x['name'], t)
+                asset[u'xt'] = db.ValueSet(x['xt'], t)
                 asset[u'filetype'] = db.ValueSet(x['filetype'], t)
                 for path in x['path']:
                     mapPath(path, asset, t)
