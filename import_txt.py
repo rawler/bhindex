@@ -92,7 +92,9 @@ def assets():
             yield asset, hash
         input.close()
 
+STATUS = bithorde.message._STATUS
 def onStatusUpdate(asset, status, key):
+    print u"%s: %s" % (STATUS.values_by_number[status.status].name, u','.join(key['name']))
     if status.status == bithorde.message.SUCCESS:
         DB.merge(key)
 
