@@ -178,14 +178,15 @@ class DB(object):
                 ORDER BY value""", (key,)):
             yield x
 
-    def merge(self, obj):
+    def update(self, obj):
         objid = obj.id
+        _dict = obj._dict
         for key in obj._dirty:
             newlistid = self._query_single("SELECT MAX(id)+1 FROM list") or 1
-            c = self.conn.executemany("INSERT INTO list (id, value) VALUES (?, ?)", ((newlistid, value) for value in obj[key]))
+            c = self.conn.executemany("INSERT INTO list (id, value) VALUES (?, ?)", ((newlistid, value) for value in _dict[key]))
             self.conn.execute("""INSERT OR REPLACE INTO map (objid, key, timestamp, listid)
                                 VALUES (?, ?, ?, ?)""", 
-                                (objid, key, obj[key].t, newlistid))
+                                (objid, key, _dict[key].t, newlistid))
         obj._dirty.clear()
 
     def commit(self):
@@ -231,7 +232,7 @@ if __name__ == '__main__':
     obj[u'name'] = ValueSet(u'monkeyman', t=time.time())
     print "Yeah, I got", str(obj), obj._dirty
 
-    db.merge(obj)
+    db.update(obj)
     print "Yeah, I got", str(obj), obj._dirty
 
     obj = db['myasset']
