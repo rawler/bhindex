@@ -12,7 +12,7 @@ import subprocess
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config
+import db, config, magnet
 config = config.read()
 
 PREVIEW_STYLESHEET = """
@@ -26,130 +26,6 @@ PREVIEW_STYLESHEET = """
 }
 
 """
-
-class Folder:
-    def __init__(self, db, parent, name, row):
-        self._db = db
-        self.name = name
-        self.parent = parent
-        self.row = row
-        if parent:
-            self.path = parent.path + [name]
-        else:
-            self.path = name
-        self.idx = None
-        self._sort = None
-
-    def _scan(self):
-        print "Scanning", self.path
-#        traceback.print_stack()
-        self._sort = list(self._db.dir("path", self.path).iteritems())
-        self._sort.sort(key=lambda x: x)
-        self._children = dict.fromkeys([name for name,count in self._sort])
-
-    def item(self, i):
-        if not self._sort:
-            self._scan()
-
-        name, count = self._sort[i]
-        if not self._children[name]:
-            db_item = [x for x in self._db.query({'path': '/'.join(self.path+[name,])})]
-            if len(db_item) == 1:
-                self._children[name] = Asset(self._db, self, name, db_item[0])
-            else:
-                self._children[name] = Folder(self._db, self, name, i)
-        return self._children[name]
-
-    def count(self):
-        if self._sort is None:
-            self._scan()
-        return len(self._sort)
-
-class Asset:
-    def __init__(self, db, parent, name, db_item):
-        self._db = db
-        self.name = name
-        self.parent = parent
-        self.path = parent.path + [name]
-        self.idx = None
-        self.db_item = db_item
-
-    def count(self):
-        return 0
-
-class AssetFolderModel(QtCore.QAbstractItemModel):
-    def __init__(self, parent, db):
-        self._db = db
-        QtCore.QAbstractItemModel.__init__(self, parent)
-        self._root = Folder(self._db, None, [], 0)
-        self._root.parent = self._root
-        self._root.idx = QtCore.QModelIndex()
-        self.setSupportedDragActions(Qt.LinkAction)
-
-    def rowCount(self, idx):
-        if idx.isValid():
-            node = idx.internalPointer()
-        else:
-            node = self._root
-        return node.count()
-
-    def columnCount(self, idx):
-        return 1
-
-    def data(self, idx, role):
-        assert idx.isValid()
-        folder = idx.internalPointer()
-        if role == Qt.DisplayRole:
-            return QtCore.QVariant(folder.name)
-        else:
-            return None
-
-    def flags(self, idx):
-        node = idx.internalPointer()
-        res = Qt.ItemIsEnabled | Qt.ItemIsSelectable
-        if node.count() == 0:
-            res |= Qt.ItemIsDragEnabled
-        return res
-
-    def mimeData(self, indexes):
-        node = indexes[0].internalPointer()
-        if hasattr(node, 'db_item'):
-           mimeData = QtCore.QMimeData();
-           bhfuse = config.get('BITHORDE', 'fusedir')
-           f = os.path.join(bhfuse, node.db_item.magnetURL())
-           mimeData.setUrls([QtCore.QUrl(f)])
-           return mimeData
-        else:
-           return None
-
-    def index(self, row, column, parent):
-        if not self.hasIndex(row, column, parent):
-            return QtCore.QModelIndex()
-
-        if parent.isValid():
-            parentItem = parent.internalPointer()
-        else:
-            parentItem = self._root
-
-        # Find child
-        obj = parentItem.item(row)
-
-        # Cache Qt-Index
-        if obj:
-            return self.createIndex(row, column, obj)
-        else:
-            return QModelIndex()
-
-    def parent(self, idx):
-        if not idx.isValid():
-            return QtCore.QModelIndex()
-        child = idx.internalPointer()
-        parent = child.parent
-        assert child
-        if (parent is self._root):
-            return QtCore.QModelIndex()
-        else:
-            return self.createIndex(parent.row, 0, parent)
 
 class FilterRule(QtGui.QWidget):
     onChanged = QtCore.pyqtSignal()
@@ -200,7 +76,7 @@ class FilterList(QtGui.QWidget):
     def __init__(self, parent, db):
         QtGui.QWidget.__init__(self, parent)
         self.db = db
-        self.keys = [k for k,c in db.list_keys() if 1 < c < 32]
+        self.keys = [k for k,c in db.list_keys()]
         layout = self.layout = QtGui.QVBoxLayout(self)
         layout.addWidget(QtGui.QLabel("Filters", self))
         layout.addStretch()
@@ -230,6 +106,59 @@ class FilterList(QtGui.QWidget):
             self.addFilter()
         self.onChanged.emit()
 
+BHFUSE_MOUNT = config.get('BITHORDE', 'fusedir')
+class AssetItemModel(QtGui.QStandardItemModel):
+    def mimeData(self, indexes):
+        node = indexes[0].internalPointer()
+        mimeData = QtCore.QMimeData()
+        urls = []
+        for asset in set(self.itemFromIndex(idx).data(Qt.UserRole).toPyObject() for idx in indexes):
+            magnetUrl = magnet.fromDbObject(asset)
+            urls.append(QtCore.QUrl(os.path.join(BHFUSE_MOUNT, magnetUrl)))
+        mimeData.setUrls(urls)
+        return mimeData
+
+class Results(QtGui.QTableView):
+    def __init__(self, parent, db):
+        QtGui.QTableView.__init__(self, parent)
+        self.db = db
+
+        self.setSortingEnabled(True)
+        self.verticalHeader().hide()
+        self.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+        self.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
+        self.setDragDropMode(QtGui.QAbstractItemView.DragOnly)
+
+    def refresh(self, criteria):
+        if criteria:
+            assets = self.db.query(criteria)
+        else:
+            assets = self.db.all()
+
+        model = AssetItemModel(0, 0, self)
+        keys = [k for k,c in self.db.list_keys(criteria) if c > 1 and k not in ('xt')]
+
+        bhfuse = config.get('BITHORDE', 'fusedir')
+        model.clear()
+        model.setHorizontalHeaderLabels(keys)
+
+        for a in assets:
+            def mkItem(k):
+                #mimeData = QtCore.QMimeData();
+                #f = os.path.join(bhfuse, node.db_item.magnetURL())
+                #mimeData.setUrls([QtCore.QUrl(f)])
+                #return mimeData
+                label = key in a and u','.join(a[key]) or u''
+                item = QtGui.QStandardItem(label)
+                item.setEditable(False)
+                item.setDropEnabled(False)
+                item.setDragEnabled(True)
+                item.setData(a, Qt.UserRole)
+                return item
+            row = [mkItem(key) for key in keys]
+            model.appendRow(row)
+        self.setModel(model)
+
 class PreviewWidget(QtGui.QFrame):
     def __init__(self, parent):
         QtGui.QFrame.__init__(self, parent)
@@ -239,8 +168,11 @@ class PreviewWidget(QtGui.QFrame):
         self.name.setObjectName("assetName")
         self.path = QtGui.QLabel(self)
         self.path.objectName = "assetPath"
+
         self.table = QtGui.QTableView(self)
         self.table.objectName = "attrtable"
+        self.table.verticalHeader().hide()
+        self.table.horizontalHeader().hide()
         self.attrs = QtGui.QStandardItemModel(0, 2, self)
         self.table.setModel(self.attrs)
         layout.addWidget(self.name)
@@ -250,13 +182,11 @@ class PreviewWidget(QtGui.QFrame):
         self.setLayout(layout)
         self.setStyleSheet(PREVIEW_STYLESHEET)
 
-    def update(self, idx):
-        item = idx.internalPointer()
-        self.name.setText(item.name)
-        self.path.setText("/"+"/".join(item.path[:-1]))
-        asset = item.db_item
+    def update(self, item):
+        self.name.setText('\n'.join(item['name']))
+        self.path.setText('\n'.join(item['path']))
         self.attrs.clear()
-        for k,v in sorted(asset.iteritems()):
+        for k,v in sorted(item.iteritems()):
             if k == u'path':
                 continue
             for x in v:
@@ -286,26 +216,35 @@ if __name__=='__main__':
     app = QtGui.QApplication(sys.argv)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-    mainwindow = uic.loadUi("browse.ui")
+    mainwindow = QtGui.QWidget()
     mainwindow.show()
+    layout = QtGui.QHBoxLayout(mainwindow)
 
     def onFilterChanged():
         f = filter.makeFilter()
-        print f
-        print len([x for x in thisdb.query(f)])
+        results.refresh(f)
 
     filter = FilterList(mainwindow, thisdb)
     filter.onChanged.connect(onFilterChanged)
-    mainwindow.layout.insertWidget(0, filter)
+    layout.insertWidget(0, filter)
 
-    model = AssetFolderModel(mainwindow, thisdb)
+    def onItemActivated(idx):
+        preview.update(idx.data(Qt.UserRole).toPyObject())
+
+    results = Results(mainwindow, thisdb)
+    results.refresh(None)
+    results.activated.connect(onItemActivated)
+    layout.insertWidget(1, results)
+
+    #model = AssetFolderModel(mainwindow, thisdb)
 
     preview = PreviewWidget(None)
 
-    mainwindow.columnView.setDragEnabled(True)
-    mainwindow.columnView.setDragDropMode(QtGui.QAbstractItemView.DragOnly)
-    mainwindow.columnView.setModel(model)
-    mainwindow.columnView.updatePreviewWidget.connect(preview.update)
-    mainwindow.columnView.setPreviewWidget(preview)
+    #mainwindow.columnView.setDragEnabled(True)
+    #mainwindow.columnView.setDragDropMode(QtGui.QAbstractItemView.DragOnly)
+    #mainwindow.columnView.setModel(model)
+    #mainwindow.columnView.updatePreviewWidget.connect(preview.update)
+    #mainwindow.columnView.setPreviewWidget(preview)
+    layout.addWidget(preview)
     sys.exit(app.exec_())
 
