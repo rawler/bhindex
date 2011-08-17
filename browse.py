@@ -70,22 +70,22 @@ class FilterRule(QtGui.QWidget):
         kb = self.keybox
         return unicode(kb.itemData(kb.currentIndex()).toString())
 
-class FilterList(QtGui.QWidget):
+class FilterList(QtGui.QToolBar):
     onChanged = QtCore.pyqtSignal()
 
     def __init__(self, parent, db):
-        QtGui.QWidget.__init__(self, parent)
+        QtGui.QToolBar.__init__(self, "Filter", parent)
         self.db = db
         self.keys = [k for k,c in db.list_keys()]
-        layout = self.layout = QtGui.QVBoxLayout(self)
-        layout.addWidget(QtGui.QLabel("Filters", self))
-        layout.addStretch()
+        #layout = self.layout = QtGui.QHBoxLayout(self)
+        #addWidget(QtGui.QLabel("Filters", self))
+        #layout.addStretch()
         self.addFilter()
 
     def addFilter(self):
         rule = FilterRule(self, self.db, self.keys)
         rule.onChanged.connect(self._onRuleChanged)
-        self.layout.insertWidget(self.layout.count()-1, rule)
+        self.addWidget(rule)
 
     def makeFilter(self):
         res = {}
@@ -160,11 +160,11 @@ class Results(QtGui.QTableView):
         self.setModel(model)
         self.resizeColumnsToContents()
 
-class PreviewWidget(QtGui.QFrame):
+class PreviewWidget(QtGui.QDockWidget):
     def __init__(self, parent):
-        QtGui.QFrame.__init__(self, parent)
-        layout = QtGui.QVBoxLayout(self)
-        self.setObjectName("preview")
+        QtGui.QDockWidget.__init__(self, "preview", parent)
+        widget = QtGui.QWidget(self)
+        layout = QtGui.QVBoxLayout(widget)
         self.name = QtGui.QLabel(self)
         self.name.setObjectName("assetName")
         self.path = QtGui.QLabel(self)
@@ -180,12 +180,22 @@ class PreviewWidget(QtGui.QFrame):
         layout.addWidget(self.path)
         layout.addItem(QtGui.QSpacerItem(20, 20, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum))
         layout.addWidget(self.table)
-        self.setLayout(layout)
         self.setStyleSheet(PREVIEW_STYLESHEET)
+        self.setWidget(widget)
 
     def update(self, item):
-        self.name.setText('\n'.join(item['name']))
-        self.path.setText('\n'.join(item['path']))
+        def bind(key, qlabel, maxchars=40):
+            if key in item:
+                text = '\n'.join(item[key])
+                qlabel.setToolTip(text)
+                if len(text) > maxchars:
+                    text = "%s..%s" % (text[:(maxchars/2)-1], text[-((maxchars/2)-1):])
+                qlabel.setText(text)
+                qlabel.show()
+            else:
+                qlabel.hide()
+        bind('name', self.name)
+        bind('path', self.path)
         self.attrs.clear()
         for k,v in sorted(item.iteritems()):
             if k == u'path':
@@ -217,9 +227,9 @@ if __name__=='__main__':
     app = QtGui.QApplication(sys.argv)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-    mainwindow = QtGui.QWidget()
+    mainwindow = QtGui.QMainWindow()
+    mainwindow.resize(600,400)
     mainwindow.show()
-    layout = QtGui.QHBoxLayout(mainwindow)
 
     def onFilterChanged():
         f = filter.makeFilter()
@@ -227,7 +237,7 @@ if __name__=='__main__':
 
     filter = FilterList(mainwindow, thisdb)
     filter.onChanged.connect(onFilterChanged)
-    layout.insertWidget(0, filter)
+    mainwindow.addToolBar(filter)
 
     def onItemActivated(idx):
         preview.update(idx.data(Qt.UserRole).toPyObject())
@@ -235,17 +245,11 @@ if __name__=='__main__':
     results = Results(mainwindow, thisdb)
     results.refresh(None)
     results.activated.connect(onItemActivated)
-    layout.insertWidget(1, results)
+    mainwindow.setCentralWidget(results)
 
-    #model = AssetFolderModel(mainwindow, thisdb)
+    preview = PreviewWidget(mainwindow)
+    mainwindow.addDockWidget(Qt.RightDockWidgetArea, preview)
 
-    preview = PreviewWidget(None)
-
-    #mainwindow.columnView.setDragEnabled(True)
-    #mainwindow.columnView.setDragDropMode(QtGui.QAbstractItemView.DragOnly)
-    #mainwindow.columnView.setModel(model)
-    #mainwindow.columnView.updatePreviewWidget.connect(preview.update)
-    #mainwindow.columnView.setPreviewWidget(preview)
-    layout.addWidget(preview)
+    #vlayout.addWidget(preview)
     sys.exit(app.exec_())
 
