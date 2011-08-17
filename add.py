@@ -8,7 +8,7 @@ import subprocess
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config, export_txt, export_links
+import db, config, export_txt, export_links, magnet
 
 config = config.read()
 
@@ -36,8 +36,7 @@ def bh_upload(file):
         except ValueError:
             continue
         if proto == 'magnet':
-            asset = db.Asset.fromMagnet(line)
-            return asset
+            return magnet.objectFromMagnet(line.strip().decode('utf8'))
     return None
 
 if __name__ == '__main__':
@@ -56,7 +55,7 @@ if __name__ == '__main__':
                       help="Strip name to just the name of the file, without path")
     parser.add_option("-f", "--force",
                       action="store_true", dest="force", default=False,
-                      help="Force upload even of assets already in sync in index")
+                      help="Force upload even of assets already found in sync in index")
 
     (options, args) = parser.parse_args()
     if len(args) < 1:
@@ -70,17 +69,21 @@ if __name__ == '__main__':
         name = options.sanitizer(file)
         mtime = path.getmtime(file)
 
-        oldasset = DB.by_name(name)
-        if (not options.force) and oldasset and hasattr(oldasset,'timestamp') \
-             and (oldasset.timestamp >= mtime):
-            return # Skip this file if already in index
+        if not options.force:
+            oldassets = DB.query({'name': name})
+            found_up2date = False
+            for a in oldassets:
+                if a['name'].t >= mtime:
+                    found_up2date = True
+            if found_up2date:
+                return
+
+        asset = bh_upload(file)
+        if asset:
+            asset.name = name
+            DB.update(asset)
         else:
-            asset = bh_upload(file)
-            if asset:
-                asset.name = name
-                DB.merge(asset)
-            else:
-                print "Error adding %s" % file
+            print "Error adding %s" % file
 
     try:
         for arg in args:
