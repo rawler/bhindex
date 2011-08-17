@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import os, os.path as path, sys
-from ConfigParser import ConfigParser,NoOptionError
+from ConfigParser import NoOptionError
+from time import time
 import subprocess
 
 HERE = path.dirname(__file__)
@@ -50,6 +51,8 @@ if __name__ == '__main__':
     parser.add_option("-T", "--no-txt", action="store_false",
                       dest="export_txt", default=True,
                       help="When done, don't immediately publish txt-format index")
+    parser.add_option("-t", "--tag", action="append", dest="tags",
+                      help="Define a tag for these uploads, such as '-tname:monkey'")
     parser.add_option("-s", "--strip-path", action="store_const", dest="sanitizer",
                       default=sanitizedpath, const=path.basename,
                       help="Strip name to just the name of the file, without path")
@@ -61,9 +64,21 @@ if __name__ == '__main__':
     if len(args) < 1:
         parser.error("At least one file must be specified")
 
+    # Parse into DB-tag-objects
+    if options.tags:
+        t = time()
+        tags = {}
+        for v in options.tags:
+            k,v = unicode(v, 'utf8').split(':',1)
+            if k not in tags:
+                tags[k] = db.ValueSet(v, t)
+            else:
+                tags[k].add[v]
+        options.tags = tags
+
     DB = db.open(config)
 
-    def add(file):
+    def add(file, tags):
         '''Try to upload one file to bithorde and add to index'''
         file = path.normpath(file)
         name = options.sanitizer(file)
@@ -81,6 +96,11 @@ if __name__ == '__main__':
         asset = bh_upload(file)
         if asset:
             asset.name = name
+            t = time()
+            for k,v in tags.iteritems():
+                v.t = t
+                asset[k] = v
+            print asset
             DB.update(asset)
         else:
             print "Error adding %s" % file
@@ -89,9 +109,9 @@ if __name__ == '__main__':
         for arg in args:
             if arg == '-':
                 for line in sys.stdin:
-                    add(line.strip())
+                    add(line.strip(), options.tags)
             else:
-                add(arg)
+                add(arg, options.tags)
     finally:
         DB.commit()
 
