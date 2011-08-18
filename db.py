@@ -28,6 +28,12 @@ class ValueSet(set):
                 assert isinstance(x, unicode)
         self.t = t
 
+    def update(self, v, t=None):
+        if not t:
+            t = time()
+        self.t = max([t, self.t])
+        set.update(self, v)
+
     def any(self):
         for x in self:
             return x
@@ -67,6 +73,16 @@ class Object(object):
         assert isinstance(value, ValueSet)
         if key not in self or self[key].t < value.t:
             self.__do_set(key, value)
+
+    def update_key(self, key, values, t=None):
+        if not t:
+            t=time()
+        if isinstance(values, unicode):
+            values = set([values])
+        if key in self:
+            self[key].update(values, t)
+        else:
+            self[key] = ValueSet(values, t)
 
     def timestamp(self):
         return max(x.t for x in self._dict.itervalues())
