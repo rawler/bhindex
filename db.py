@@ -92,32 +92,51 @@ class Object(object):
 
 def create_DB(conn):
     conn.executescript("""
+    CREATE TABLE IF NOT EXISTS obj (
+        objid INTEGER PRIMARY KEY AUTOINCREMENT,
+        obj TEXT UNIQUE NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS obj_obj ON obj (obj);
+
+    CREATE TABLE IF NOT EXISTS key (
+        keyid INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS key_key ON key (key);
+
     CREATE TABLE IF NOT EXISTS map (
-        objid TEXT NOT NULL,
-        key TEXT NOT NULL,
+        objid INTEGER NOT NULL,
+        keyid INTEGER NOT NULL,
         timestamp INT NOT NULL,
         listid INTEGER,
-        PRIMARY KEY (objid, key)
+        PRIMARY KEY (objid, keyid),
+        FOREIGN KEY (objid) REFERENCES obj (objid),
+        FOREIGN KEY (keyid) REFERENCES key (keyid),
+        FOREIGN KEY (listid) REFERENCES list (listid)
     );
     CREATE INDEX IF NOT EXISTS map_obj ON map (objid);
-    CREATE INDEX IF NOT EXISTS map_key ON map (key);
+    CREATE INDEX IF NOT EXISTS map_key ON map (keyid);
     CREATE INDEX IF NOT EXISTS map_list ON map (listid);
 
     CREATE TABLE IF NOT EXISTS list (
-        itemid INTEGER PRIMARY_KEY AUTO_INCREMENT,
-        id INTEGER NOT NULL,
+        itemid INTEGER PRIMARY KEY AUTOINCREMENT,
+        listid INTEGER NOT NULL,
         value TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS list_id ON list (id);
+    CREATE INDEX IF NOT EXISTS list_id ON list (listid);
     CREATE INDEX IF NOT EXISTS list_value ON list (value);
     """)
 
 def _sql_for_criteria(crit):
     sql = []
     params = []
-    match_query = """SELECT DISTINCT objid FROM map JOIN list ON (map.listid = list.id)
-                        WHERE map.key = ? AND list.value LIKE ?"""
-    any_query = """SELECT DISTINCT objid FROM map WHERE key = ?"""
+    match_query = """SELECT DISTINCT objid FROM map 
+                        NATURAL JOIN list
+                        NATURAL JOIN key
+                     WHERE key = ? AND list.value LIKE ?"""
+    any_query =   """SELECT DISTINCT objid FROM map
+                        NATURAL JOIN key
+                     WHERE key = ?"""
     for k,v in crit.iteritems():
         params.append(k)
         if v is ANY:
@@ -156,19 +175,30 @@ class DB(object):
         else:
             return default
 
+    def _getId(self, tbl, id):
+        params = locals()
+        objid = self._query_single("SELECT %(tbl)sid FROM %(tbl)s WHERE %(tbl)s = ?" % params, (id,))
+        if not objid:
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT OR IGNORE INTO %(tbl)s (%(tbl)s) VALUES (?)" % params, (id,))
+            objid = cursor.lastrowid
+        return objid
+
     def __getitem__(self, objid):
         obj = Object(objid)
-        for key, timestamp, listid in self._query_all("SELECT key, timestamp, listid FROM map WHERE objid = ?", (objid,)):
-            values = ValueSet(v=(x for x, in self._query_all("SELECT value FROM list WHERE id = ?", (listid,))), t=timestamp)
+        for key, timestamp, listid in self._query_all("SELECT key, timestamp, listid FROM map NATURAL JOIN key NATURAL JOIN obj WHERE obj = ?", (objid,)):
+            values = ValueSet(v=(x for x, in self._query_all("SELECT value FROM list WHERE listid = ?", (listid,))), t=timestamp)
             obj._dict[key] = values
         return obj
 
     def query(self, criteria):
-        for objid, in self._query_all(*_sql_for_criteria(criteria)):
+        query, params = _sql_for_criteria(criteria)
+        query = "SELECT obj FROM obj NATURAL JOIN (%s)" % query
+        for objid, in self._query_all(query, params):
             yield self[objid]
 
     def all(self):
-        for objid, in self._query_all('SELECT DISTINCT objid FROM map', ()):
+        for objid, in self._query_all('SELECT DISTINCT obj FROM map NATURAL JOIN obj', ()):
             yield self[objid]
 
     def list_keys(self, criteria=None):
@@ -176,7 +206,8 @@ class DB(object):
         query = """SELECT key, COUNT(*)
     FROM (SELECT key, list.value, COUNT(*) AS c
         FROM map
-            JOIN list ON map.listid = list.id
+            NATURAL JOIN list
+            NATURAL JOIN key
             %s
         GROUP BY key, list.value)
     GROUP BY key"""
@@ -191,21 +222,23 @@ class DB(object):
 
     def list_values(self, key):
         for x, in self._query_all("""SELECT DISTINCT value
-                FROM map
-                    JOIN list ON map.listid = list.id
-                WHERE map.key = ?
+                FROM map NATURAL JOIN list NATURAL JOIN key
+                WHERE key = ?
                 ORDER BY value""", (key,)):
             yield x
 
     def update(self, obj):
-        objid = obj.id
         _dict = obj._dict
+        cursor = self.conn.cursor()
+        objid = self._getId('obj', obj.id)
+
         for key in obj._dirty:
-            newlistid = self._query_single("SELECT MAX(id)+1 FROM list") or 1
-            c = self.conn.executemany("INSERT INTO list (id, value) VALUES (?, ?)", ((newlistid, value) for value in _dict[key]))
-            self.conn.execute("""INSERT OR REPLACE INTO map (objid, key, timestamp, listid)
+            newlistid = self._query_single("SELECT MAX(listid)+1 FROM list") or 1
+            c = cursor.executemany("INSERT INTO list (listid, value) VALUES (?, ?)", ((newlistid, value) for value in _dict[key]))
+            keyid = self._getId('key', key)
+            cursor.execute("""INSERT OR IGNORE INTO map (objid, keyid, timestamp, listid)
                                 VALUES (?, ?, ?, ?)""", 
-                                (objid, key, _dict[key].t, newlistid))
+                                (objid, keyid, _dict[key].t, newlistid))
         obj._dirty.clear()
 
     def commit(self):
