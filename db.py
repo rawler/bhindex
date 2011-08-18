@@ -32,6 +32,9 @@ class ValueSet(set):
         for x in self:
             return x
 
+    def join(self, sep=u', '):
+        return unicode(sep).join(self)
+
 class Object(object):
     def __init__(self, objid, init={}):
         self.id = objid

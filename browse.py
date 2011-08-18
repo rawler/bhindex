@@ -148,7 +148,7 @@ class Results(QtGui.QTableView):
                 #f = os.path.join(bhfuse, node.db_item.magnetURL())
                 #mimeData.setUrls([QtCore.QUrl(f)])
                 #return mimeData
-                label = key in a and u','.join(a[key]) or u''
+                label = key in a and a[key].join() or u''
                 item = QtGui.QStandardItem(label)
                 item.setEditable(False)
                 item.setDropEnabled(False)
@@ -186,7 +186,7 @@ class PreviewWidget(QtGui.QDockWidget):
     def update(self, item):
         def bind(key, qlabel, maxchars=40):
             if key in item:
-                text = '\n'.join(item[key])
+                text = item[key].join(u'\n')
                 qlabel.setToolTip(text)
                 if len(text) > maxchars:
                     text = "%s..%s" % (text[:(maxchars/2)-1], text[-((maxchars/2)-1):])
