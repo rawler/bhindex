@@ -77,9 +77,6 @@ class FilterList(QtGui.QToolBar):
         QtGui.QToolBar.__init__(self, "Filter", parent)
         self.db = db
         self.keys = [k for k,c in db.list_keys()]
-        #layout = self.layout = QtGui.QHBoxLayout(self)
-        #addWidget(QtGui.QLabel("Filters", self))
-        #layout.addStretch()
         self.addFilter()
 
     def addFilter(self):
@@ -107,27 +104,33 @@ class FilterList(QtGui.QToolBar):
         self.onChanged.emit()
 
 BHFUSE_MOUNT = config.get('BITHORDE', 'fusedir')
+def fuseForAsset(asset):
+    magnetUrl = magnet.fromDbObject(asset)
+    return os.path.join(BHFUSE_MOUNT, magnetUrl)
+
 class AssetItemModel(QtGui.QStandardItemModel):
     def mimeData(self, indexes):
         node = indexes[0].internalPointer()
         mimeData = QtCore.QMimeData()
-        urls = []
-        for asset in set(self.itemFromIndex(idx).data(Qt.UserRole).toPyObject() for idx in indexes):
-            magnetUrl = magnet.fromDbObject(asset)
-            urls.append(QtCore.QUrl(os.path.join(BHFUSE_MOUNT, magnetUrl)))
+        assets = set(self.itemFromIndex(idx).data(Qt.UserRole).toPyObject() for idx in indexes)
+        urls = list(QtCore.QUrl(fuseForAsset(asset)) for asset in assets)
         mimeData.setUrls(urls)
         return mimeData
 
 class Results(QtGui.QTableView):
-    def __init__(self, parent, db):
+    def __init__(self, parent, db, preview):
         QtGui.QTableView.__init__(self, parent)
         self.db = db
+        self.preview = preview
 
         self.setSortingEnabled(True)
         self.verticalHeader().hide()
         self.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
         self.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
         self.setDragDropMode(QtGui.QAbstractItemView.DragOnly)
+
+        self.activated.connect(self._selectionChanged)
+        self.doubleClicked.connect(self.onRun)
 
     def refresh(self, criteria):
         if criteria:
@@ -144,10 +147,6 @@ class Results(QtGui.QTableView):
 
         for a in assets:
             def mkItem(k):
-                #mimeData = QtCore.QMimeData();
-                #f = os.path.join(bhfuse, node.db_item.magnetURL())
-                #mimeData.setUrls([QtCore.QUrl(f)])
-                #return mimeData
                 label = key in a and a[key].join() or u''
                 item = QtGui.QStandardItem(label)
                 item.setEditable(False)
@@ -159,6 +158,22 @@ class Results(QtGui.QTableView):
             model.appendRow(row)
         self.setModel(model)
         self.resizeColumnsToContents()
+
+    def _selectionChanged(self, idx):
+        self.preview.update(idx.data(Qt.UserRole).toPyObject())
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+            selection = self.selectedIndexes()
+            if len(selection):
+                idx = selection[-1]
+                self.onRun(idx)
+        else:
+            QtGui.QTableView.keyPressEvent(self, event)
+
+    def onRun(self, idx):
+        asset = self.model().itemFromIndex(idx).data(Qt.UserRole).toPyObject()
+        subprocess.Popen(['xdg-open', fuseForAsset(asset)])
 
 class PreviewWidget(QtGui.QDockWidget):
     def __init__(self, parent):
@@ -209,10 +224,6 @@ class PreviewWidget(QtGui.QDockWidget):
 
 if __name__=='__main__':
     parser = OptionParser(usage="usage: %prog [options] <PATH>")
-    parser.add_option("-d", "--dir", action="store_true", dest="dir",
-                      help="dir-mode, list subdirectory")
-    parser.add_option("-l", "--list", action="store_false", dest="dir",
-                      help="list-mode, list files")
 
     (options, args) = parser.parse_args()
     if len(args)>1:
@@ -239,15 +250,12 @@ if __name__=='__main__':
     filter.onChanged.connect(onFilterChanged)
     mainwindow.addToolBar(filter)
 
-    def onItemActivated(idx):
-        preview.update(idx.data(Qt.UserRole).toPyObject())
-
-    results = Results(mainwindow, thisdb)
-    results.refresh(None)
-    results.activated.connect(onItemActivated)
-    mainwindow.setCentralWidget(results)
-
     preview = PreviewWidget(mainwindow)
+    results = Results(mainwindow, thisdb, preview)
+
+    results.refresh(None)
+
+    mainwindow.setCentralWidget(results)
     mainwindow.addDockWidget(Qt.RightDockWidgetArea, preview)
 
     #vlayout.addWidget(preview)
