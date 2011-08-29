@@ -118,6 +118,7 @@ class AssetItemModel(QtGui.QStandardItemModel):
         return mimeData
 
 class Results(QtGui.QTableView):
+    KEY_BLACKLIST = ('xt', 'path')
     def __init__(self, parent, db, preview):
         QtGui.QTableView.__init__(self, parent)
         self.db = db
@@ -139,7 +140,7 @@ class Results(QtGui.QTableView):
             assets = self.db.all()
 
         model = AssetItemModel(0, 0, self)
-        keys = [k for k,c in self.db.list_keys(criteria) if c > 1 and k not in ('xt')]
+        keys = [k for k,c in self.db.list_keys(criteria) if c > 1 and k not in self.KEY_BLACKLIST]
 
         bhfuse = config.get('BITHORDE', 'fusedir')
         model.clear()
