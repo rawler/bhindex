@@ -118,7 +118,7 @@ class AssetItemModel(QtGui.QStandardItemModel):
         return mimeData
 
 class Results(QtGui.QTableView):
-    KEY_BLACKLIST = ('xt', 'path')
+    KEY_BLACKLIST = ('xt', 'path', 'filetype')
     def __init__(self, parent, db, preview):
         QtGui.QTableView.__init__(self, parent)
         self.db = db
@@ -135,12 +135,28 @@ class Results(QtGui.QTableView):
 
     def refresh(self, criteria):
         if criteria:
-            assets = self.db.query(criteria)
+            assets = [x for x in self.db.query(criteria)]
         else:
-            assets = self.db.all()
+            assets = [x for x in self.db.all()]
 
         model = AssetItemModel(0, 0, self)
-        keys = [k for k,c in self.db.list_keys(criteria) if c > 1 and k not in self.KEY_BLACKLIST]
+        keys = {}
+        for asset in assets:
+            for key, asset_values in asset.iteritems():
+                if key in self.KEY_BLACKLIST:
+                    continue
+                count, key_values = keys.get(key, (0, set()))
+                key_values.update(asset_values)
+                if asset_values:
+                    count += 1
+                keys[key] = (count, key_values)
+
+        count_limit = len(assets) * 0.7
+        keys = [(key, len(values)) for key, (count, values) in keys.iteritems() if count >= count_limit and len(values) > 1]
+        if keys:
+            avg = sum(v for _,v in keys)/len(keys)
+            keys.sort(key=lambda (k,v): abs(v-avg))
+            keys = [key for key,_ in keys]
 
         bhfuse = config.get('BITHORDE', 'fusedir')
         model.clear()
