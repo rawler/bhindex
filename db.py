@@ -81,6 +81,7 @@ class Object(object):
             values = set([values])
         if key in self:
             self[key].update(values, t)
+            self._dirty.add(key)
         else:
             self[key] = ValueSet(values, t)
 
@@ -236,7 +237,7 @@ class DB(object):
             newlistid = self._query_single("SELECT MAX(listid)+1 FROM list") or 1
             c = cursor.executemany("INSERT INTO list (listid, value) VALUES (?, ?)", ((newlistid, value) for value in _dict[key]))
             keyid = self._getId('key', key)
-            cursor.execute("""INSERT OR IGNORE INTO map (objid, keyid, timestamp, listid)
+            cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
                                 VALUES (?, ?, ?, ?)""", 
                                 (objid, keyid, _dict[key].t, newlistid))
         obj._dirty.clear()

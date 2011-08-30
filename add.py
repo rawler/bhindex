@@ -36,6 +36,7 @@ def imdb_scraper(obj, id):
         t = time()
         obj.update_key(u'rating', unicode(movie['rating']), t)
         obj.update_key(u'name', movie['title'], t)
+        obj.update_key(u'image', movie.get('cover url', ()), t)
         obj.update_key(u'year', unicode(movie['year']), t)
         obj.update_key(u'director', (p['name'] for p in movie['director']), t)
         obj.update_key(u'genre', movie['genres'], t)
