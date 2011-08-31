@@ -118,6 +118,8 @@ class Results(QtDeclarative.QDeclarativeView):
         self.rootContext().setContextProperty("myModel", [])
         self.setSource(QtCore.QUrl("results.qml"))
 
+        self.dragStart = None
+
     def refresh(self, criteria):
         if criteria:
             assets = self.db.query(criteria)
@@ -131,6 +133,35 @@ class Results(QtDeclarative.QDeclarativeView):
     def onRun(self, idx):
         asset = self.model().itemFromIndex(idx).data(Qt.UserRole).toPyObject()
         subprocess.Popen(['xdg-open', fuseForAsset(asset)])
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.dragStart = event.pos()
+        QtDeclarative.QDeclarativeView.mousePressEvent(self, event)
+
+    def mouseMoveEvent(self, event):
+        if self.dragStart and event.buttons() & Qt.LeftButton:
+            distance = (event.pos() - self.dragStart).manhattanLength()
+            if distance >= QtGui.QApplication.startDragDistance():
+                item = self.itemAt(self.dragStart)
+                self.dragStart = None
+                obj = None
+
+                while item:
+                    obj = item.toGraphicsObject()
+                    if obj:
+                        obj = obj.property('itemData').toPyObject()
+                        if obj:
+                            break
+                    item = item.parentItem()
+
+                if obj:
+                    drag = QtGui.QDrag(self);
+                    mimeData = QtCore.QMimeData()
+                    mimeData.setUrls([QtCore.QUrl(fuseForAsset(obj.asset))])
+                    drag.setMimeData(mimeData)
+                    dropAction = drag.exec_(Qt.CopyAction | Qt.LinkAction)
+        QtDeclarative.QDeclarativeView.mouseMoveEvent(self, event)
 
 if __name__=='__main__':
     parser = OptionParser(usage="usage: %prog [options] <PATH>")

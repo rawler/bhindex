@@ -4,4 +4,8 @@ class Visualization(ItemVisualization):
     CRITERIA = {'category': 'movies'}
 
     def getTitle(self):
-        return "%(series)s - %(season)sx%(episode)s" % self.item
+        a = self.asset
+        if 'title' in a:
+            return a['title']
+        else:
+            return a['name']
