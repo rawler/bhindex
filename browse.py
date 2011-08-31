@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from PyQt4 import QtGui, uic, QtCore
+from PyQt4 import QtGui, uic, QtCore, QtDeclarative
 from PyQt4.QtCore import Qt
 
 import os, os.path as path, sys, time, signal
@@ -15,17 +15,9 @@ sys.path.append(HERE)
 import db, config, magnet
 config = config.read()
 
-PREVIEW_STYLESHEET = """
-#preview {
-  min-width: 400px;
-  padding: 18px 18px 5px 18px;
-}
+from visualizations import default, movies, series
 
-#assetName {
-  font-size: 18px;
-}
-
-"""
+VISUALIZATIONS = (series.Visualization, movies.Visualization, default.Visualization)
 
 class FilterRule(QtGui.QWidget):
     onChanged = QtCore.pyqtSignal()
@@ -108,136 +100,36 @@ def fuseForAsset(asset):
     magnetUrl = magnet.fromDbObject(asset)
     return os.path.join(BHFUSE_MOUNT, magnetUrl)
 
-class AssetItemModel(QtGui.QStandardItemModel):
-    def mimeData(self, indexes):
-        node = indexes[0].internalPointer()
-        mimeData = QtCore.QMimeData()
-        assets = set(self.itemFromIndex(idx).data(Qt.UserRole).toPyObject() for idx in indexes)
-        urls = list(QtCore.QUrl(fuseForAsset(asset)) for asset in assets)
-        mimeData.setUrls(urls)
-        return mimeData
+def mapItemToView(item):
+    for x in VISUALIZATIONS:
+        if item.matches(x.CRITERIA):
+            return x(item)
+    assert False
 
-class Results(QtGui.QTableView):
+class Results(QtDeclarative.QDeclarativeView):
     KEY_BLACKLIST = ('xt', 'path', 'filetype')
-    def __init__(self, parent, db, preview):
-        QtGui.QTableView.__init__(self, parent)
+    def __init__(self, parent, db):
+        QtDeclarative.QDeclarativeView.__init__(self, parent)
         self.db = db
-        self.preview = preview
 
-        self.setSortingEnabled(True)
-        self.verticalHeader().hide()
-        self.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
-        self.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
-        self.setDragDropMode(QtGui.QAbstractItemView.DragOnly)
-
-        self.activated.connect(self._selectionChanged)
-        self.doubleClicked.connect(self.onRun)
+        self.setResizeMode(self.SizeRootObjectToView)
+        self.setAutoFillBackground(False)
+        self.setStyleSheet("background:transparent;");
+        self.rootContext().setContextProperty("myModel", [])
+        self.setSource(QtCore.QUrl("results.qml"))
 
     def refresh(self, criteria):
         if criteria:
-            assets = [x for x in self.db.query(criteria)]
+            assets = self.db.query(criteria)
         else:
-            assets = [x for x in self.db.all()]
+            assets = self.db.all()
 
-        model = AssetItemModel(0, 0, self)
-        keys = {}
-        for asset in assets:
-            for key, asset_values in asset.iteritems():
-                if key in self.KEY_BLACKLIST:
-                    continue
-                count, key_values = keys.get(key, (0, set()))
-                key_values.update(asset_values)
-                if asset_values:
-                    count += 1
-                keys[key] = (count, key_values)
-
-        count_limit = len(assets) * 0.7
-        keys = [(key, len(values)) for key, (count, values) in keys.iteritems() if count >= count_limit and len(values) > 1]
-        if keys:
-            avg = sum(v for _,v in keys)/len(keys)
-            keys.sort(key=lambda (k,v): abs(v-avg))
-            keys = [key for key,_ in keys]
-
-        bhfuse = config.get('BITHORDE', 'fusedir')
-        model.clear()
-        model.setHorizontalHeaderLabels(keys)
-
-        for a in assets:
-            def mkItem(k):
-                label = key in a and a[key].join() or u''
-                item = QtGui.QStandardItem(label)
-                item.setEditable(False)
-                item.setDropEnabled(False)
-                item.setDragEnabled(True)
-                item.setData(a, Qt.UserRole)
-                return item
-            row = [mkItem(key) for key in keys]
-            model.appendRow(row)
-        self.setModel(model)
-        self.resizeColumnsToContents()
-
-    def _selectionChanged(self, idx):
-        self.preview.update(idx.data(Qt.UserRole).toPyObject())
-
-    def keyPressEvent(self, event):
-        if event.key() in (Qt.Key_Return, Qt.Key_Enter):
-            selection = self.selectedIndexes()
-            if len(selection):
-                idx = selection[-1]
-                self.onRun(idx)
-        else:
-            QtGui.QTableView.keyPressEvent(self, event)
+        self.model = model = list(mapItemToView(x) for x in assets)
+        self.rootContext().setContextProperty("myModel", model)
 
     def onRun(self, idx):
         asset = self.model().itemFromIndex(idx).data(Qt.UserRole).toPyObject()
         subprocess.Popen(['xdg-open', fuseForAsset(asset)])
-
-class PreviewWidget(QtGui.QDockWidget):
-    def __init__(self, parent):
-        QtGui.QDockWidget.__init__(self, "preview", parent)
-        widget = QtGui.QWidget(self)
-        layout = QtGui.QVBoxLayout(widget)
-        self.name = QtGui.QLabel(self)
-        self.name.setObjectName("assetName")
-        self.path = QtGui.QLabel(self)
-        self.path.objectName = "assetPath"
-
-        self.table = QtGui.QTableView(self)
-        self.table.objectName = "attrtable"
-        self.table.verticalHeader().hide()
-        self.table.horizontalHeader().hide()
-        self.attrs = QtGui.QStandardItemModel(0, 2, self)
-        self.table.setModel(self.attrs)
-        layout.addWidget(self.name)
-        layout.addWidget(self.path)
-        layout.addItem(QtGui.QSpacerItem(20, 20, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Minimum))
-        layout.addWidget(self.table)
-        self.setStyleSheet(PREVIEW_STYLESHEET)
-        self.setWidget(widget)
-
-    def update(self, item):
-        def bind(key, qlabel, maxchars=40):
-            if key in item:
-                text = item[key].join(u'\n')
-                qlabel.setToolTip(text)
-                if len(text) > maxchars:
-                    text = "%s..%s" % (text[:(maxchars/2)-1], text[-((maxchars/2)-1):])
-                qlabel.setText(text)
-                qlabel.show()
-            else:
-                qlabel.hide()
-        bind('name', self.name)
-        bind('path', self.path)
-        self.attrs.clear()
-        for k,v in sorted(item.iteritems()):
-            if k == u'path':
-                continue
-            for x in v:
-                a = QtGui.QStandardItem(k)
-                a.setSelectable(False)
-                b = QtGui.QStandardItem(x)
-                b.setSelectable(False)
-                self.attrs.appendRow([a,b])
 
 if __name__=='__main__':
     parser = OptionParser(usage="usage: %prog [options] <PATH>")
@@ -252,6 +144,7 @@ if __name__=='__main__':
 
     thisdb = db.open(config)
 
+    QtGui.QApplication.setGraphicsSystem('raster')
     app = QtGui.QApplication(sys.argv)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -267,13 +160,12 @@ if __name__=='__main__':
     filter.onChanged.connect(onFilterChanged)
     mainwindow.addToolBar(filter)
 
-    preview = PreviewWidget(mainwindow)
-    results = Results(mainwindow, thisdb, preview)
+    results = Results(mainwindow, thisdb)
 
     results.refresh(None)
+    results.show()
 
     mainwindow.setCentralWidget(results)
-    mainwindow.addDockWidget(Qt.RightDockWidgetArea, preview)
 
     #vlayout.addWidget(preview)
     sys.exit(app.exec_())

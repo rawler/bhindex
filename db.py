@@ -40,6 +40,7 @@ class ValueSet(set):
 
     def join(self, sep=u', '):
         return unicode(sep).join(self)
+    __unicode__ = __str__ = join
 
 class Object(object):
     def __init__(self, objid, init={}):
@@ -69,10 +70,13 @@ class Object(object):
     def iteritems(self):
         return self._dict.iteritems()
 
-    def update_if_newer(self, key, value):
-        assert isinstance(value, ValueSet)
-        if key not in self or self[key].t < value.t:
-            self.__do_set(key, value)
+    def matches(self, criteria):
+        for key, value in criteria.iteritems():
+            if key not in self._dict:
+                return False
+            if value not in (None, ANY) and value not in self._dict:
+                return False
+        return True
 
     def update_key(self, key, values, t=None):
         if not t:
