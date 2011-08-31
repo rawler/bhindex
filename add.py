@@ -11,13 +11,6 @@ sys.path.append(HERE)
 
 import db, config, export_txt, export_links, magnet
 
-try:
-    from imdb import IMDb
-    ia = IMDb()
-except ImportError:
-    print "WARNING: failed to load imdb-scraper due to missing library imdbpy."
-    ia = None
-
 config = config.read()
 
 try:
@@ -27,22 +20,6 @@ try:
 except NoOptionError:
   pass
 bh_upload_bin = 'bhupload'
-
-def imdb_scraper(obj, id):
-    if not ia:
-        print "WARNING: failed to scrape from imdb due to missing library imdbpy."
-    movie = ia.get_movie(id)
-    if movie:
-        t = time()
-        obj.update_key(u'rating', unicode(movie['rating']), t)
-        obj.update_key(u'name', movie['title'], t)
-        obj.update_key(u'image', movie.get('cover url', ()), t)
-        obj.update_key(u'year', unicode(movie['year']), t)
-        obj.update_key(u'director', (p['name'] for p in movie['director']), t)
-        obj.update_key(u'genre', movie['genres'], t)
-        obj.update_key(u'actor', (p['name'] for p in movie['cast']), t)
-    else:
-        print "Movie not found in IMDB"
 
 def sanitizedpath(file):
     '''Assumes path is normalized through path.normpath first,
@@ -123,8 +100,7 @@ if __name__ == '__main__':
             for k,v in tags.iteritems():
                 v.t = t
                 asset[k] = v
-            if 'imdb' in asset:
-                imdb_scraper(asset, asset['imdb'].any())
+            scraper.scrape_for(asset)
             for k,v in sorted(asset.iteritems()):
                 print u"%s: %s" % (k, v.join())
             DB.update(asset)
