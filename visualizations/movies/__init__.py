@@ -1,11 +1,11 @@
 from visualizations import ItemVisualization
 
 class Visualization(ItemVisualization):
-    CRITERIA = {'category': 'movies'}
+    CRITERIA = {'category': 'Movies'}
 
     def getTitle(self):
         a = self.asset
         if 'title' in a:
-            return a['title']
+            return a['title'].join()
         else:
-            return a['name']
+            return a['name'].join()

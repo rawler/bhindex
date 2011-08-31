@@ -74,7 +74,7 @@ class Object(object):
         for key, value in criteria.iteritems():
             if key not in self._dict:
                 return False
-            if value not in (None, ANY) and value not in self._dict:
+            if value not in (None, ANY) and value not in self._dict[key]:
                 return False
         return True
 
