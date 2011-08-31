@@ -106,7 +106,7 @@ def mapItemToView(item):
             return x(item)
     assert False
 
-class Results(QtDeclarative.QDeclarativeView):
+class ResultsView(QtDeclarative.QDeclarativeView):
     KEY_BLACKLIST = ('xt', 'path', 'filetype')
     def __init__(self, parent, db):
         QtDeclarative.QDeclarativeView.__init__(self, parent)
@@ -118,6 +118,7 @@ class Results(QtDeclarative.QDeclarativeView):
         self.rootContext().setContextProperty("myModel", [])
         self.setSource(QtCore.QUrl("results.qml"))
 
+        self.rootObject().runAsset.connect(self.runAsset)
         self.dragStart = None
 
     def refresh(self, criteria):
@@ -129,10 +130,6 @@ class Results(QtDeclarative.QDeclarativeView):
         self.model = model = list(mapItemToView(x) for x in assets)
         model.sort(key=lambda x: x.title)
         self.rootContext().setContextProperty("myModel", model)
-
-    def onRun(self, idx):
-        asset = self.model().itemFromIndex(idx).data(Qt.UserRole).toPyObject()
-        subprocess.Popen(['xdg-open', fuseForAsset(asset)])
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -163,6 +160,10 @@ class Results(QtDeclarative.QDeclarativeView):
                     dropAction = drag.exec_(Qt.CopyAction | Qt.LinkAction)
         QtDeclarative.QDeclarativeView.mouseMoveEvent(self, event)
 
+    def runAsset(self, guiitem):
+        asset = guiitem.toPyObject().asset
+        subprocess.Popen(['xdg-open', fuseForAsset(asset)])
+
 if __name__=='__main__':
     parser = OptionParser(usage="usage: %prog [options] <PATH>")
 
@@ -192,7 +193,7 @@ if __name__=='__main__':
     filter.onChanged.connect(onFilterChanged)
     mainwindow.addToolBar(filter)
 
-    results = Results(mainwindow, thisdb)
+    results = ResultsView(mainwindow, thisdb)
 
     results.refresh(None)
     results.show()
