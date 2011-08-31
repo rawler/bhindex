@@ -125,6 +125,7 @@ class Results(QtDeclarative.QDeclarativeView):
             assets = self.db.all()
 
         self.model = model = list(mapItemToView(x) for x in assets)
+        model.sort(key=lambda x: x.title)
         self.rootContext().setContextProperty("myModel", model)
 
     def onRun(self, idx):
