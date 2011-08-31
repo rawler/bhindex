@@ -21,11 +21,20 @@ ListView {
         }
         color: mouse.containsMouse ?  hoverColor : itemColor
         property variant itemData: modelData
+        Image {
+            id: categoryIcon
+            source: modelData.categoryIcon
+            height: 32
+            x: 10
+            y: 4
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+        }
         Item {
             id: shortPres
             height: modelData.imageUri ? 128 : 40
             anchors { 
-                left: parent.left 
+                left: categoryIcon.right
                 right: parent.right
                 verticalCenter: parent.verticalCenter
             }
