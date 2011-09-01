@@ -56,6 +56,9 @@ class Object(object):
     def __getitem__(self, key):
         return self._dict[key]
 
+    def get(self, key, default=None):
+        return self._dict.get(key, default)
+
     def __contains__(self, key):
         return key in self._dict
 

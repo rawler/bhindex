@@ -10,7 +10,7 @@ import bithorde
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config, magnet
+import db, config, magnet, scraper
 config = config.read()
 
 LINKDIR = config.get('LINKSEXPORT', 'linksdir')
@@ -63,10 +63,11 @@ def assets():
         input.close()
 
 STATUS = bithorde.message._STATUS
-def onStatusUpdate(asset, status, key):
-    print u"%s: %s" % (STATUS.values_by_number[status.status].name, u','.join(key['name']))
+def onStatusUpdate(asset, status, db_asset):
+    print u"%s: %s" % (STATUS.values_by_number[status.status].name, u','.join(db_asset['name']))
     if status.status == bithorde.message.SUCCESS:
-        DB.update(key)
+        scraper.scrape_for(db_asset)
+        DB.update(db_asset)
 
 client = bithorde.BitHordeClient(assets(), onStatusUpdate)
 bithorde.connectUNIX(UNIXSOCKET, client)
