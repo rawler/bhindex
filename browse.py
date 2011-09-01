@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from PyQt4 import QtGui, uic, QtCore, QtDeclarative
-from PyQt4.QtCore import Qt
+from PySide import QtGui, QtCore, QtDeclarative
+from PySide.QtCore import Qt
 
 import os, os.path as path, sys, time, signal
 from ConfigParser import ConfigParser
@@ -20,7 +20,7 @@ from visualizations import default, movies, series
 VISUALIZATIONS = (series.Visualization, movies.Visualization, default.Visualization)
 
 class FilterRule(QtGui.QWidget):
-    onChanged = QtCore.pyqtSignal()
+    onChanged = QtCore.Signal()
 
     def __init__(self, parent, db, keys):
         QtGui.QWidget.__init__(self, parent)
@@ -36,7 +36,7 @@ class FilterRule(QtGui.QWidget):
 
         valuebox = self.valuebox = QtGui.QComboBox(self)
         self.populateValuesForKey(None)
-        valuebox.currentIndexChanged.connect(self.onChanged.emit)
+        valuebox.currentIndexChanged.connect(lambda x: self.onChanged.emit())
         layout.addWidget(valuebox)
 
     def populateValuesForKey(self, key):
@@ -46,24 +46,21 @@ class FilterRule(QtGui.QWidget):
             for value in self.db.list_values(key):
                 self.valuebox.addItem(value, userData=value)
 
-    def onKeyChanged(self, idx):
-        key = unicode(self.keybox.itemData(idx).toString())
+    def onKeyChanged(self, key):
         self.populateValuesForKey(key)
         self.onChanged.emit()
 
     def getRule(self):
         vb = self.valuebox
-        value = vb.itemData(vb.currentIndex()).toPyObject()
-        if isinstance(value, QtCore.QString):
-            value = unicode(value)
+        value = vb.itemData(vb.currentIndex())
         return self.getKey(), value
 
     def getKey(self):
         kb = self.keybox
-        return unicode(kb.itemData(kb.currentIndex()).toString())
+        return kb.itemData(kb.currentIndex())
 
 class FilterList(QtGui.QToolBar):
-    onChanged = QtCore.pyqtSignal()
+    onChanged = QtCore.Signal()
 
     def __init__(self, parent, db):
         QtGui.QToolBar.__init__(self, "Filter", parent)
@@ -76,7 +73,7 @@ class FilterList(QtGui.QToolBar):
         rule.onChanged.connect(self._onRuleChanged)
         self.addWidget(rule)
 
-    def makeFilter(self):
+    def criteria(self):
         res = {}
         for c in self.children():
             if isinstance(c, FilterRule):
@@ -145,9 +142,8 @@ class ResultsView(QtDeclarative.QDeclarativeView):
                 obj = None
 
                 while item:
-                    obj = item.toGraphicsObject()
-                    if obj:
-                        obj = obj.property('itemData').toPyObject()
+                    if hasattr(item, 'property'):
+                        obj = item.property('itemData')
                         if obj:
                             break
                     item = item.parentItem()
@@ -161,7 +157,7 @@ class ResultsView(QtDeclarative.QDeclarativeView):
         QtDeclarative.QDeclarativeView.mouseMoveEvent(self, event)
 
     def runAsset(self, guiitem):
-        asset = guiitem.toPyObject().asset
+        asset = guiitem.asset
         subprocess.Popen(['xdg-open', fuseForAsset(asset)])
 
 if __name__=='__main__':
@@ -186,7 +182,7 @@ if __name__=='__main__':
     mainwindow.show()
 
     def onFilterChanged():
-        f = filter.makeFilter()
+        f = filter.criteria()
         results.refresh(f)
 
     filter = FilterList(mainwindow, thisdb)

@@ -1,4 +1,4 @@
-from PyQt4 import QtCore
+from PySide import QtCore
 import sys, os.path
 
 class ItemVisualization(QtCore.QObject):
@@ -10,8 +10,8 @@ class ItemVisualization(QtCore.QObject):
         return self.getTitle()
     def getTitle(self):
         return self.asset['name'].any()
-    titleChanged = QtCore.pyqtSignal()
-    title = QtCore.pyqtProperty("QString", _title, notify=titleChanged)
+    titleChanged = QtCore.Signal()
+    title = QtCore.Property("QString", _title, notify=titleChanged)
 
     def _imageUri(self):
         return self.getImage()
@@ -20,8 +20,8 @@ class ItemVisualization(QtCore.QObject):
             return self.asset['image'].any()
         else:
             return ""
-    imageUriChanged = QtCore.pyqtSignal()
-    imageUri = QtCore.pyqtProperty("QString", _imageUri, notify=imageUriChanged)
+    imageUriChanged = QtCore.Signal()
+    imageUri = QtCore.Property("QString", _imageUri, notify=imageUriChanged)
 
     def _categoryIcon(self):
         dirname = os.path.dirname(sys.modules[type(self).__module__].__file__)
@@ -30,5 +30,5 @@ class ItemVisualization(QtCore.QObject):
             return fname
         else:
             return ""
-    categoryIconChanged = QtCore.pyqtSignal()
-    categoryIcon = QtCore.pyqtProperty("QString", _categoryIcon, notify=categoryIconChanged)
+    categoryIconChanged = QtCore.Signal()
+    categoryIcon = QtCore.Property("QString", _categoryIcon, notify=categoryIconChanged)
