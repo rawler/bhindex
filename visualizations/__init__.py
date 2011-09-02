@@ -1,10 +1,20 @@
-from PyQt4 import QtCore
+from PyQt4 import QtCore, QtDeclarative
 import sys, os.path
 
 class ItemVisualization(QtCore.QObject):
     def __init__(self, asset):
         QtCore.QObject.__init__(self)
         self.asset = asset
+        self.__tags = None
+
+    def _tags(self):
+        if not self.__tags:
+            self.__tags = tags = QtDeclarative.QDeclarativePropertyMap()
+            for k,v in self.asset.iteritems():
+                tags.insert(k, v.join())
+        return self.__tags
+    tagsChanged = QtCore.pyqtSignal()
+    tags = QtCore.pyqtProperty("QDeclarativePropertyMap*", _tags, notify=tagsChanged)
 
     def _title(self):
         return self.getTitle()
@@ -32,3 +42,20 @@ class ItemVisualization(QtCore.QObject):
             return ""
     categoryIconChanged = QtCore.pyqtSignal()
     categoryIcon = QtCore.pyqtProperty("QString", _categoryIcon, notify=categoryIconChanged)
+
+    @QtCore.pyqtSignature("", "QDeclarativeComponent*")
+    def briefView(self):
+        return self._briefView
+
+    @QtCore.pyqtSignature("", "QDeclarativeComponent")
+    def fullView(self):
+        return self._fullView
+
+    @classmethod
+    def loadComponents(cls, engine):
+        dirname = os.path.dirname(sys.modules[cls.__module__].__file__)
+        briefSrc = os.path.join(dirname, 'brief.qml')
+        if os.path.exists(briefSrc):
+            cls._briefView = QtDeclarative.QDeclarativeComponent(engine, briefSrc, engine)
+        else:
+            cls._briefView = None

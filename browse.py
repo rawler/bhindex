@@ -118,6 +118,9 @@ class ResultsView(QtDeclarative.QDeclarativeView):
         self.rootContext().setContextProperty("myModel", [])
         self.setSource(QtCore.QUrl("results.qml"))
 
+        for vis in VISUALIZATIONS:
+            vis.loadComponents(self.engine())
+
         self.rootObject().runAsset.connect(self.runAsset)
         self.dragStart = None
 

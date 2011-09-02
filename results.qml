@@ -55,6 +55,11 @@ ListView {
                 x: -10
                 fillMode: Image.PreserveAspectFit
             }
+            Loader {
+                id: briefView
+                sourceComponent: itemData.briefView()
+                anchors.fill: parent
+            }
         }
     }
 }
