@@ -45,13 +45,31 @@ def scrape_for(obj):
         imdb_search(obj)
 
 if __name__ == '__main__':
-    import db, config, sys
+    import db, config, sys, cliopt
 
     config = config.read()
     db = db.open(config)
 
-    obj = db[sys.argv[1]]
-    if obj:
-        scrape_for(obj)
-        db.update(obj)
-        db.commit()
+    usage = "usage: %prog [options] [assetid] ..."
+    parser = cliopt.OptionParser(usage=usage)
+    parser.add_option("-a", "--add", action="append", dest="adds",
+                      help="Add a value for an attr for objects, such as '-tname:monkey'. Previous tags for the attribute will be kept.")
+    parser.add_option("-s", "--set", action="append", dest="attrs",
+                      help="Overwrite an attr tag for objects, such as '-tname:monkey'. Previous tags for the attribute will be removed.")
+    (options, args) = parser.parse_args()
+
+    attrs = cliopt.parse_attrs(options.attrs)
+    adds = cliopt.parse_attrs(options.adds)
+
+    for arg in args:
+        obj = db[arg]
+
+        if obj:
+            for k,v in attrs.iteritems():
+                obj[k] = v
+            for k,v in adds.iteritems():
+                obj.update_key(k, v)
+
+            scrape_for(obj)
+            db.update(obj)
+            db.commit()

@@ -2,7 +2,7 @@
 from urlparse import urlparse, parse_qs
 from urllib import quote_plus as urlquote
 import cPickle as pickle
-import time
+from time import time
 
 import bithorde
 
@@ -289,7 +289,7 @@ if __name__ == '__main__':
     db = DB(config.read())
 
     obj = db['myasset']
-    obj[u'name'] = ValueSet(u'monkeyman', t=time.time())
+    obj[u'name'] = ValueSet(u'monkeyman', t=time())
     print "Yeah, I got", str(obj), obj._dirty
 
     db.update(obj)
