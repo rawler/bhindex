@@ -82,7 +82,8 @@ class ImportSession(object):
 if __name__ == '__main__':
     import cliopt
 
-    usage = "usage: %prog [options] [<format>:<url>] ..."
+    usage = """usage: %prog [options] [<format>:<url>] ...
+where <format> is either 'json' or 'magnetlist'"""
     parser = cliopt.OptionParser(usage=usage)
     parser.add_option("-s", "--scrape", action="store_true", dest="scrape", default=False,
                       help="Enables external scraping for found assets.")
