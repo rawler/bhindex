@@ -98,6 +98,9 @@ class Object(object):
     def __repr__(self):
         return repr(self._dict)
 
+    def __unicode__(self):
+        return u"db.Object {\n%s\n}" % u'\n'.join(u" %s: %s" % x for x in self.iteritems())
+
 def create_DB(conn):
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS obj (
