@@ -31,8 +31,10 @@ def imdb_scraper(obj, id):
         obj.update_key(u'director', (p['name'] for p in movie['director']), t)
         obj.update_key(u'genre', movie['genres'], t)
         obj.update_key(u'actor', (p['name'] for p in movie['cast']), t)
+        return True
     else:
         print "Movie not found in IMDB"
+        return False
 
 def imdb_search(obj):
     if not ia:
@@ -45,8 +47,10 @@ def imdb_search(obj):
             if year in obj['year']:
                 print "IMDB Scraper found match for %s (%s)" % (title, year)
                 return imdb_scraper(obj, movie.movieID)
+    return False
 
 def tvdb_search(obj):
+    res = False
     def iter_series():
         for series in obj['series']:
             try:
@@ -87,15 +91,17 @@ def tvdb_search(obj):
         map_item(u'genre', series, 'genre', trim_split)
         map_item(u'image', series, 'poster', trim_split)
         map_item(u'rating', series, 'rating', trim_split)
+        res = True
     iter_series()
+    return res
 
 def scrape_for(obj):
     if 'imdb' in obj:
-        imdb_scraper(obj, obj['imdb'].any())
+        return imdb_scraper(obj, obj['imdb'].any())
     elif 'title' in obj and 'year' in obj:
-        imdb_search(obj)
+        return imdb_search(obj)
     elif 'series' in obj and 'season' in obj and 'episode' in obj:
-        tvdb_search(obj)
+        return tvdb_search(obj)
 
 if __name__ == '__main__':
     import db, config, sys, cliopt
@@ -123,6 +129,6 @@ if __name__ == '__main__':
             for k,v in adds.iteritems():
                 obj.update_key(k, v)
 
-            scrape_for(obj)
-            db.update(obj)
-            db.commit()
+            if scrape_for(obj):
+                db.update(obj)
+                db.commit()
