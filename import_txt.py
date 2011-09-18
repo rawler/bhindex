@@ -72,7 +72,7 @@ class ImportSession(object):
             self.db.update(db_asset)
 
     def run(self):
-        client = bithorde.BitHordeClient(self.assets(), self.onStatusUpdate)
+        client = bithorde.BitHordeIteratorClient(self.assets(), self.onStatusUpdate)
         bithorde.connectUNIX(UNIXSOCKET, client)
         bithorde.reactor.run()
 

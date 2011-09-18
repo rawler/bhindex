@@ -57,7 +57,7 @@ def main():
 
     outfile.write('[')
 
-    client = bithorde.BitHordeClient(list_db(DB), onStatusUpdate)
+    client = bithorde.BitHordeIteratorClient(list_db(DB), onStatusUpdate)
     bithorde.connectUNIX(UNIXSOCKET, client)
     bithorde.reactor.run()
 
