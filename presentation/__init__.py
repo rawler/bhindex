@@ -1,7 +1,7 @@
 from PySide import QtCore, QtDeclarative
 import sys, os.path
 
-class ItemVisualization(QtCore.QObject):
+class ItemPresentation(QtCore.QObject):
     def __init__(self, asset):
         QtCore.QObject.__init__(self)
         self.asset = asset

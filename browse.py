@@ -15,9 +15,9 @@ sys.path.append(HERE)
 import db, config, magnet
 config = config.read()
 
-from visualizations import default, movies, series
+from presentation import default, movies, series
 
-VISUALIZATIONS = (series.Visualization, movies.Visualization, default.Visualization)
+PRESENTATIONS = (series.Presentation, movies.Presentation, default.Presentation)
 
 class FilterRule(QtGui.QWidget):
     onChanged = QtCore.Signal()
@@ -98,7 +98,7 @@ def fuseForAsset(asset):
     return os.path.join(BHFUSE_MOUNT, magnetUrl)
 
 def mapItemToView(item):
-    for x in VISUALIZATIONS:
+    for x in PRESENTATIONS:
         if item.matches(x.CRITERIA):
             return x(item)
     assert False
@@ -115,7 +115,7 @@ class ResultsView(QtDeclarative.QDeclarativeView):
         self.rootContext().setContextProperty("myModel", [])
         self.setSource(QtCore.QUrl("results.qml"))
 
-        for vis in VISUALIZATIONS:
+        for vis in PRESENTATIONS:
             vis.loadComponents(self.engine())
 
         self.rootObject().runAsset.connect(self.runAsset)

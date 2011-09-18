@@ -1,6 +1,6 @@
-from visualizations import ItemVisualization
+from presentation import ItemPresentation
 
-class Visualization(ItemVisualization):
+class Presentation(ItemPresentation):
     CRITERIA = {'series': None}
 
     def getTitle(self):
