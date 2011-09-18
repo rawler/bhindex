@@ -36,7 +36,7 @@ class FilterRule(QtGui.QWidget):
 
         valuebox = self.valuebox = QtGui.QComboBox(self)
         self.populateValuesForKey(None)
-        valuebox.currentIndexChanged.connect(lambda x: self.onChanged.emit())
+        valuebox.currentIndexChanged.connect(lambda _: self.onChanged.emit())
         layout.addWidget(valuebox)
 
     def populateValuesForKey(self, key):
@@ -46,7 +46,10 @@ class FilterRule(QtGui.QWidget):
             for value in self.db.list_values(key):
                 self.valuebox.addItem(value, userData=value)
 
+    @QtCore.Slot(unicode)
     def onKeyChanged(self, key):
+        if isinstance(key, int):
+            key = self.keybox.itemText(key)
         self.populateValuesForKey(key)
         self.onChanged.emit()
 
