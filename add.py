@@ -41,10 +41,10 @@ def bh_upload(file):
     return None
 
 if __name__ == '__main__':
-    from optparse import OptionParser
+    import cliopt
     usage = "usage: %prog [options] file1 [file2 ...]\n" \
             "  An argument of '-' will expand to filenames read line for line on standard input."
-    parser = OptionParser(usage=usage)
+    parser = cliopt.OptionParser(usage=usage)
     parser.add_option("-L", "--no-links", action="store_false",
                       dest="export_links", default=True,
                       help="When done, don't immediately export links to links-directory")
@@ -65,16 +65,7 @@ if __name__ == '__main__':
         parser.error("At least one file must be specified")
 
     # Parse into DB-tag-objects
-    if options.tags:
-        t = time()
-        tags = {}
-        for v in options.tags:
-            k,v = unicode(v, 'utf8').split(':',1)
-            if k not in tags:
-                tags[k] = db.ValueSet(v, t)
-            else:
-                tags[k].add[v]
-        options.tags = tags
+    tags = cliopt.parse_attrs(options.tags)
 
     DB = db.open(config)
 

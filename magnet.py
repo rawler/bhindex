@@ -48,7 +48,6 @@ RULES = [
 
 def applyRules(asset, t):
     for rule, filter in RULES:
-        print rule
         collection = {}
         filter = filter or (lambda x: x)
         for key, subrule in rule.iteritems():
@@ -61,13 +60,11 @@ def applyRules(asset, t):
             if not foundmatch:
                 collection = {}
                 break
-        print collection
         for k,v in collection.iteritems():
             if k in asset:
                 asset[k].add(v)
             else:
                 asset[k] = db.ValueSet(v, t)
-        print asset
 
 def objectFromMagnet(magnetLink, t=None):
     x = parse(magnetLink)

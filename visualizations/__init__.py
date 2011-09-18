@@ -1,4 +1,4 @@
-from PyQt4 import QtCore, QtDeclarative
+from PySide import QtCore, QtDeclarative
 import sys, os.path
 
 class ItemVisualization(QtCore.QObject):
@@ -13,15 +13,15 @@ class ItemVisualization(QtCore.QObject):
             for k,v in self.asset.iteritems():
                 tags.insert(k, v.join())
         return self.__tags
-    tagsChanged = QtCore.pyqtSignal()
-    tags = QtCore.pyqtProperty("QDeclarativePropertyMap*", _tags, notify=tagsChanged)
+    tagsChanged = QtCore.Signal()
+    tags = QtCore.Property(QtDeclarative.QDeclarativePropertyMap, _tags, notify=tagsChanged)
 
     def _title(self):
         return self.getTitle()
     def getTitle(self):
         return self.asset['name'].any()
-    titleChanged = QtCore.pyqtSignal()
-    title = QtCore.pyqtProperty("QString", _title, notify=titleChanged)
+    titleChanged = QtCore.Signal()
+    title = QtCore.Property(unicode, _title, notify=titleChanged)
 
     def _imageUri(self):
         return self.getImage()
@@ -30,8 +30,8 @@ class ItemVisualization(QtCore.QObject):
             return self.asset['image'].any()
         else:
             return ""
-    imageUriChanged = QtCore.pyqtSignal()
-    imageUri = QtCore.pyqtProperty("QString", _imageUri, notify=imageUriChanged)
+    imageUriChanged = QtCore.Signal()
+    imageUri = QtCore.Property(unicode, _imageUri, notify=imageUriChanged)
 
     def _categoryIcon(self):
         dirname = os.path.dirname(sys.modules[type(self).__module__].__file__)
@@ -40,14 +40,14 @@ class ItemVisualization(QtCore.QObject):
             return fname
         else:
             return ""
-    categoryIconChanged = QtCore.pyqtSignal()
-    categoryIcon = QtCore.pyqtProperty("QString", _categoryIcon, notify=categoryIconChanged)
+    categoryIconChanged = QtCore.Signal()
+    categoryIcon = QtCore.Property(unicode, _categoryIcon, notify=categoryIconChanged)
 
-    @QtCore.pyqtSignature("", "QDeclarativeComponent*")
+    @QtCore.Slot(returns=QtDeclarative.QDeclarativeComponent)
     def briefView(self):
         return self._briefView
 
-    @QtCore.pyqtSignature("", "QDeclarativeComponent")
+    @QtCore.Slot(returns=QtDeclarative.QDeclarativeComponent)
     def fullView(self):
         return self._fullView
 
