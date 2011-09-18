@@ -14,7 +14,7 @@ class ItemVisualization(QtCore.QObject):
                 tags.insert(k, v.join())
         return self.__tags
     tagsChanged = QtCore.Signal()
-    tags = QtCore.Property(QtDeclarative.QDeclarativePropertyMap, _tags, notify=tagsChanged)
+    tags = QtCore.Property(QtCore.QObject, _tags, notify=tagsChanged)
 
     def _title(self):
         return self.getTitle()
@@ -43,11 +43,11 @@ class ItemVisualization(QtCore.QObject):
     categoryIconChanged = QtCore.Signal()
     categoryIcon = QtCore.Property(unicode, _categoryIcon, notify=categoryIconChanged)
 
-    @QtCore.Slot(returns=QtDeclarative.QDeclarativeComponent)
+    @QtCore.Slot(result=QtDeclarative.QDeclarativeComponent)
     def briefView(self):
         return self._briefView
 
-    @QtCore.Slot(returns=QtDeclarative.QDeclarativeComponent)
+    @QtCore.Slot(result=QtDeclarative.QDeclarativeComponent)
     def fullView(self):
         return self._fullView
 
@@ -56,6 +56,6 @@ class ItemVisualization(QtCore.QObject):
         dirname = os.path.dirname(sys.modules[cls.__module__].__file__)
         briefSrc = os.path.join(dirname, 'brief.qml')
         if os.path.exists(briefSrc):
-            cls._briefView = QtDeclarative.QDeclarativeComponent(engine, briefSrc, engine)
+            cls._briefView = QtDeclarative.QDeclarativeComponent(engine, briefSrc)
         else:
             cls._briefView = None

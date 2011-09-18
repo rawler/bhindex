@@ -4,7 +4,7 @@ ListView {
     clip: true
     model: myModel
     property color itemColor: Qt.rgba(0.9,0.9,0.9,0)
-    property color hoverColor: Qt.rgba(0.9,0.9,0.9,0.3)
+    property color hoverColor: Qt.rgba(1.,1.,1.,0.3)
 
     signal runAsset(variant asset)
 
@@ -32,13 +32,14 @@ ListView {
         }
         Item {
             id: shortPres
-            height: modelData.imageUri ? 128 : 40
+            height: modelData.imageUri ? 128 : 50
             anchors { 
                 left: categoryIcon.right
                 right: parent.right
                 verticalCenter: parent.verticalCenter
             }
             Text {
+                id: title
                 text: modelData.title
                 y: 4
                 elide: Text.ElideMiddle
@@ -58,7 +59,11 @@ ListView {
             Loader {
                 id: briefView
                 sourceComponent: itemData.briefView()
-                anchors.fill: parent
+                anchors {
+                    left: parent.left;
+                    top: title.bottom
+                    right: itemImage.left
+                }
             }
         }
     }
