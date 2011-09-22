@@ -141,7 +141,8 @@ class ResultList(QtCore.QAbstractListModel):
     TagsRole = Qt.UserRole + 1
     ImageURIRole = Qt.UserRole + 2
 
-    def __init__(self, parent):
+    def __init__(self, parent, results):
+        self._unfiltered = iter(results)
         self._list = list()
         QtCore.QAbstractListModel.__init__(self, parent)
         self.setRoleNames({
@@ -152,7 +153,32 @@ class ResultList(QtCore.QAbstractListModel):
             self.ObjRole: "obj",
         })
 
-    def append(self, val):
+    def canFetchMore(self, _):
+        return bool(self._unfiltered)
+
+    def fetchMore(self, _):
+        i = 0
+        while self._unfiltered and i < 5:
+            asset = self._unfiltered.next()
+            id = asset.get('xt', '')
+            id = id and id.any()
+            if not id.startswith('tree:tiger:'):
+                continue
+            bithorde_querier(id[len('tree:tiger:'):], self._queueAppend, asset)
+            i += 1
+
+    def _queueAppend(self, db_asset):
+        event = QtCore.QEvent(QtCore.QEvent.User)
+        event.asset = db_asset
+        QtCore.QCoreApplication.postEvent(self, event)
+
+    def event(self, event):
+        if event.type()==QtCore.QEvent.User and hasattr(event, 'asset'):
+            self._append(mapItemToView(event.asset))
+            return True
+        return QtDeclarative.QDeclarativeView.event(self, event)
+
+    def _append(self, val):
         pos = len(self._list)
         self.beginInsertRows(QtCore.QModelIndex(), pos, pos)
         self._list.append(val)
@@ -198,28 +224,11 @@ class ResultsView(QtDeclarative.QDeclarativeView):
             assets = self.db.query(criteria)
         else:
             assets = self.db.all()
-
-        self.model = model = ResultList(self)
-        self.rootContext().setContextProperty("myModel", model)
+        assets = sorted(assets, key=lambda x: x['name'].any())
 
         bithorde_querier.clear()
-        for asset in sorted(assets, key=lambda x: x['name'].any()):
-            id = asset.get('xt', '')
-            id = id and id.any()
-            if not id.startswith('tree:tiger:'):
-                continue
-            bithorde_querier(id[len('tree:tiger:'):], self.addItem, asset)
-
-    def addItem(self, db_asset):
-        event = QtCore.QEvent(QtCore.QEvent.User)
-        event.asset = db_asset
-        QtCore.QCoreApplication.postEvent(self, event)
-
-    def event(self, event):
-        if event.type()==QtCore.QEvent.User and hasattr(event, 'asset'):
-            self.model.append(mapItemToView(event.asset))
-            return True
-        return QtDeclarative.QDeclarativeView.event(self, event)
+        self.model = model = ResultList(self, assets)
+        self.rootContext().setContextProperty("myModel", model)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
