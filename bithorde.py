@@ -32,6 +32,9 @@ class Querier(object):
         else:
             self._queue.append((hashIds, key))
 
+    def clear(self):
+        self._queue = list()
+
     def _request(self, hashIds, key):
         asset = bithorde.Asset()
         asset.key = key

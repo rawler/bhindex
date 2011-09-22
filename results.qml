@@ -17,13 +17,13 @@ ListView {
             id: mouse
             anchors.fill: parent
             hoverEnabled: true
-            onDoubleClicked: runAsset(itemData)
+            onDoubleClicked: runAsset(obj)
         }
         color: mouse.containsMouse ?  hoverColor : itemColor
-        property variant itemData: modelData
+        property variant itemObj: obj
         Image {
-            id: categoryIcon
-            source: modelData.categoryIcon
+            id: categoryIconView
+            source: categoryIcon
             height: 32
             x: 10
             y: 4
@@ -32,36 +32,36 @@ ListView {
         }
         Item {
             id: shortPres
-            height: modelData.imageUri ? 128 : 50
+            height: imageUri ? 128 : 50
             anchors { 
-                left: categoryIcon.right
+                left: categoryIconView.right
                 right: parent.right
                 verticalCenter: parent.verticalCenter
             }
             Text {
-                id: title
-                text: modelData.title
+                id: titleView
+                text: title
                 y: 4
                 elide: Text.ElideMiddle
                 font.pointSize: 16
-                anchors { 
+                anchors {
                     left: parent.left
                     right: itemImage.left
                 }
             }
             Image {
                 id: itemImage
-                source: modelData.imageUri
+                source: imageUri
                 anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
                 x: -10
                 fillMode: Image.PreserveAspectFit
             }
             Loader {
                 id: briefView
-                sourceComponent: itemData.briefView()
+                sourceComponent: obj.briefView()
                 anchors {
                     left: parent.left;
-                    top: title.bottom
+                    top: titleView.bottom
                     right: itemImage.left
                 }
             }

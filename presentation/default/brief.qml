@@ -5,7 +5,7 @@ Item {
 
     Text {
         id: year
-        text: (itemData.tags.path || "")
+        text: tags.path || ""
         elide: Text.ElideMiddle
         font.pointSize: 11
     }

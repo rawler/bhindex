@@ -5,13 +5,13 @@ Item {
 
     Text {
         id: year
-        text: "Year: <b>" + (itemData.tags.year || "")
+        text: "Year: <b>" + (tags.year || "")
         font.pointSize: 11
     }
 
     Text {
         id: genre
-        text: "Genre: <b>" + (itemData.tags.genre || "")
+        text: "Genre: <b>" + (tags.genre || "")
         font.pointSize: 11
         anchors {
             left: year.right
@@ -21,7 +21,7 @@ Item {
 
     Text {
         id: rating
-        text: "Rating: <b>" + (itemData.tags.rating || "")
+        text: "Rating: <b>" + (tags.rating || "")
         font.pointSize: 11
         anchors {
             left: genre.right

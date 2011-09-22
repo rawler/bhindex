@@ -5,13 +5,13 @@ Item {
 
     Text {
         id: genre
-        text: "Genre: <b>" + (itemData.tags.genre || "")
+        text: "Genre: <b>" + (tags.genre || "")
         font.pointSize: 11
     }
 
     Text {
         id: rating
-        text: "Rating: <b>" + (itemData.tags.episode_rating || "")
+        text: "Rating: <b>" + (tags.episode_rating || "")
         font.pointSize: 11
         anchors {
             left: genre.right

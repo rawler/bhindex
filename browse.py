@@ -7,6 +7,8 @@ from PySide.QtCore import Qt
 import os, os.path as path, sys, time, signal
 from ConfigParser import ConfigParser
 from optparse import OptionParser
+from threading import Thread
+from time import sleep
 import subprocess
 
 HERE = path.dirname(__file__)
@@ -14,6 +16,34 @@ sys.path.append(HERE)
 
 import db, config, magnet
 config = config.read()
+
+import bithorde
+class QueryThread(bithorde.Client, Thread):
+    def run(self):
+        bithorde.connectUNIX("/tmp/bithorde", self)
+        bithorde.reactor.run(installSignalHandlers=0)
+
+    def onConnected(self):
+        self._querier = bithorde.Querier(self, self._callback)
+
+    def _callback(self, asset, status, key):
+        callback, key = key
+        callback(key)
+
+    def start(self):
+        Thread.start(self)
+        while not hasattr(self, '_querier'):
+            sleep(0.05)
+
+    def __call__(self, tiger_id, callback, key):
+        self._querier.submit({bithorde.message.TREE_TIGER: bithorde.b32decode(tiger_id)}, (callback, key))
+
+    def clear(self):
+        self._querier.clear()
+
+bithorde_querier = QueryThread()
+bithorde_querier.daemon = True
+bithorde_querier.start()
 
 from presentation import default, movies, series
 
@@ -106,6 +136,45 @@ def mapItemToView(item):
             return x(item)
     assert False
 
+class ResultList(QtCore.QAbstractListModel):
+    ObjRole = Qt.UserRole
+    TagsRole = Qt.UserRole + 1
+    ImageURIRole = Qt.UserRole + 2
+
+    def __init__(self, parent):
+        self._list = list()
+        QtCore.QAbstractListModel.__init__(self, parent)
+        self.setRoleNames({
+            Qt.DisplayRole: "title",
+            Qt.DecorationRole: "categoryIcon",
+            self.TagsRole: "tags",
+            self.ImageURIRole: "imageUri",
+            self.ObjRole: "obj",
+        })
+
+    def append(self, val):
+        pos = len(self._list)
+        self.beginInsertRows(QtCore.QModelIndex(), pos, pos)
+        self._list.append(val)
+        self.endInsertRows()
+
+    def rowCount(self, _):
+        return len(self._list)
+
+    def data(self, idx, role):
+        obj = self._list[idx.row()]
+        if role == Qt.DisplayRole:
+            return obj.title
+        if role == Qt.DecorationRole:
+            return obj.categoryIcon
+        if role == self.TagsRole:
+            return obj.tags
+        if role == self.ImageURIRole:
+            return obj.imageUri
+        if role == self.ObjRole:
+            return obj
+        return obj.title
+
 class ResultsView(QtDeclarative.QDeclarativeView):
     KEY_BLACKLIST = ('xt', 'path', 'filetype')
     def __init__(self, parent, db):
@@ -130,9 +199,27 @@ class ResultsView(QtDeclarative.QDeclarativeView):
         else:
             assets = self.db.all()
 
-        self.model = model = list(mapItemToView(x) for x in assets)
-        model.sort(key=lambda x: x.title)
+        self.model = model = ResultList(self)
         self.rootContext().setContextProperty("myModel", model)
+
+        bithorde_querier.clear()
+        for asset in sorted(assets, key=lambda x: x['name'].any()):
+            id = asset.get('xt', '')
+            id = id and id.any()
+            if not id.startswith('tree:tiger:'):
+                continue
+            bithorde_querier(id[len('tree:tiger:'):], self.addItem, asset)
+
+    def addItem(self, db_asset):
+        event = QtCore.QEvent(QtCore.QEvent.User)
+        event.asset = db_asset
+        QtCore.QCoreApplication.postEvent(self, event)
+
+    def event(self, event):
+        if event.type()==QtCore.QEvent.User and hasattr(event, 'asset'):
+            self.model.append(mapItemToView(event.asset))
+            return True
+        return QtDeclarative.QDeclarativeView.event(self, event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
