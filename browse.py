@@ -158,14 +158,14 @@ class ResultList(QtCore.QAbstractListModel):
 
     def fetchMore(self, _):
         i = 0
-        while self._unfiltered and i < 5:
-            asset = self._unfiltered.next()
+        for asset in self._unfiltered:
             id = asset.get('xt', '')
             id = id and id.any()
             if not id.startswith('tree:tiger:'):
                 continue
             bithorde_querier(id[len('tree:tiger:'):], self._queueAppend, asset)
             i += 1
+            if i > 15: break
 
     def _queueAppend(self, db_asset):
         event = QtCore.QEvent(QtCore.QEvent.User)
