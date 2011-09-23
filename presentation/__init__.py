@@ -59,3 +59,8 @@ class ItemPresentation(QtCore.QObject):
             cls._briefView = QtDeclarative.QDeclarativeComponent(engine, briefSrc)
         else:
             cls._briefView = None
+        fullSrc = os.path.join(dirname, 'full.qml')
+        if os.path.exists(fullSrc):
+            cls._fullView = QtDeclarative.QDeclarativeComponent(engine, fullSrc)
+        else:
+            cls._fullView = None

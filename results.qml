@@ -10,16 +10,22 @@ ListView {
 
     delegate: Rectangle {
         id: item
-        height: shortPres.height+4
+        height: imageUri ? itemImage.height : 50
         width: parent.width
         radius: 8
         MouseArea {
             id: mouse
             anchors.fill: parent
             hoverEnabled: true
+            onClicked: {
+                if (item.state == "selected")
+                    item.state = ""
+                else
+                    item.state = "selected"
+            }
             onDoubleClicked: runAsset(obj)
         }
-        color: mouse.containsMouse ?  hoverColor : itemColor
+        color: mouse.containsMouse ? hoverColor : itemColor
         property variant itemObj: obj
         Image {
             id: categoryIconView
@@ -30,41 +36,54 @@ ListView {
             fillMode: Image.PreserveAspectFit
             smooth: true
         }
-        Item {
+        Text {
             id: shortPres
-            height: imageUri ? 128 : 50
-            anchors { 
+            anchors {
                 left: categoryIconView.right
-                right: parent.right
-                verticalCenter: parent.verticalCenter
+                right: itemImage.right
+                top: parent.top
             }
-            Text {
-                id: titleView
-                text: title
-                y: 4
-                elide: Text.ElideMiddle
-                font.pointSize: 16
-                anchors {
-                    left: parent.left
-                    right: itemImage.left
-                }
+            text: title
+            y: 4
+            elide: Text.ElideMiddle
+            font.pointSize: 16
+        }
+        Image {
+            id: itemImage
+            source: imageUri
+            height: 128
+            anchors { right: parent.right; top: parent.top }
+            fillMode: Image.PreserveAspectFit
+        }
+        Loader {
+            id: briefView
+            sourceComponent: obj.briefView()
+            anchors {
+                left: categoryIconView.right
+                top: shortPres.bottom
+                right: itemImage.left
             }
-            Image {
-                id: itemImage
-                source: imageUri
-                anchors { right: parent.right; top: parent.top; bottom: parent.bottom }
-                x: -10
-                fillMode: Image.PreserveAspectFit
+        }
+        Loader {
+            id: fullView
+            anchors {
+                left: categoryIconView.right
+                leftMargin: 4
+                top: briefView.bottom
+                right: itemImage.left
             }
-            Loader {
-                id: briefView
-                sourceComponent: obj.briefView()
-                anchors {
-                    left: parent.left;
-                    top: titleView.bottom
-                    right: itemImage.left
-                }
+        }
+
+        states: [
+            State {
+                name: "selected"
+                PropertyChanges {target: item; height: shortPres.height + briefView.height + fullView.height}
+                PropertyChanges {target: fullView; sourceComponent: obj.fullView()}
             }
+        ]
+
+        transitions: Transition {
+          PropertyAnimation { properties: "width,height"; duration: 250; easing.type: Easing.InOutQuad}
         }
     }
 }
