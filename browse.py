@@ -245,7 +245,7 @@ class ResultsView(QtDeclarative.QDeclarativeView):
 
                 while item:
                     if hasattr(item, 'property'):
-                        obj = item.property('itemData')
+                        obj = item.property('itemObj')
                         if obj:
                             break
                     item = item.parentItem()
