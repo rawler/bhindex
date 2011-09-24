@@ -18,20 +18,15 @@ def fuseForAsset(asset):
     magnetUrl = magnet.fromDbObject(asset)
     return os.path.join(BHFUSE_MOUNT, magnetUrl)
 
-def mapItemToView(item):
-    for x in PRESENTATIONS:
-        if item.matches(x.CRITERIA):
-            return x(item)
-    assert False
-
 class ResultList(QtCore.QAbstractListModel):
     ObjRole = Qt.UserRole
     TagsRole = Qt.UserRole + 1
     ImageURIRole = Qt.UserRole + 2
 
-    def __init__(self, parent, results):
+    def __init__(self, parent, results, db):
         self._unfiltered = iter(results)
         self._list = list()
+        self._db = db
         QtCore.QAbstractListModel.__init__(self, parent)
         self.setRoleNames({
             Qt.DisplayRole: "title",
@@ -41,35 +36,41 @@ class ResultList(QtCore.QAbstractListModel):
             self.ObjRole: "obj",
         })
 
+    def mapObjToView(self, objid):
+        obj = self._db[objid]
+        for x in PRESENTATIONS:
+            if obj.matches(x.CRITERIA):
+                return x(obj)
+        assert False
+
     def canFetchMore(self, _):
         return bool(self._unfiltered)
 
     def fetchMore(self, _):
         i = 0
-        for asset in self._unfiltered:
-            id = asset.get('xt', '')
-            id = id and id.any()
+        for id in self._unfiltered:
             if not id.startswith('tree:tiger:'):
                 continue
-            bithorde_querier(id[len('tree:tiger:'):], self._queueAppend, asset)
+            bithorde_querier(id[len('tree:tiger:'):], self._queueAppend, id)
             i += 1
             if i > 15: break
 
-    def _queueAppend(self, db_asset):
+    def _queueAppend(self, assetid):
         event = QtCore.QEvent(QtCore.QEvent.User)
-        event.asset = db_asset
+        event.assetid = assetid
         QtCore.QCoreApplication.postEvent(self, event)
 
     def event(self, event):
-        if event.type()==QtCore.QEvent.User and hasattr(event, 'asset'):
-            self._append(mapItemToView(event.asset))
+        if event.type()==QtCore.QEvent.User and hasattr(event, 'assetid'):
+            self._append(event.assetid)
             return True
         return QtDeclarative.QDeclarativeView.event(self, event)
 
-    def _append(self, val):
+    def _append(self, assetid):
         pos = len(self._list)
+        viewItem = self.mapObjToView(assetid)
         self.beginInsertRows(QtCore.QModelIndex(), pos, pos)
-        self._list.append(val)
+        self._list.append(viewItem)
         self.endInsertRows()
 
     def rowCount(self, _):
@@ -109,18 +110,18 @@ class ResultsView(QtDeclarative.QDeclarativeView):
 
     def refresh(self, criteria):
         if criteria:
-            assets = self.db.query(criteria)
+            assets = self.db.query_ids(criteria)
         else:
-            assets = self.db.all()
+            assets = self.db.all_ids()
 
         def sort_key(x):
-            title = x.get('title')
+            title = self.db.get_attr(x, 'title')
             title = title and title.any()
-            return title or x['name'].any()
+            return title or self.db.get_attr(x, 'name').any()
         assets = sorted(assets, key=sort_key)
 
         bithorde_querier.clear()
-        self.model = model = ResultList(self, assets)
+        self.model = model = ResultList(self, assets, self.db)
         self.rootContext().setContextProperty("myModel", model)
 
     def mousePressEvent(self, event):

@@ -202,14 +202,30 @@ class DB(object):
             obj._dict[key] = values
         return obj
 
-    def query(self, criteria):
+    def get_attr(self, objid, attr):
+        row = self._query_first("SELECT timestamp, listid FROM map NATURAL JOIN key NATURAL JOIN obj WHERE obj = ? AND key = ?", (objid, attr))
+        if row:
+            timestamp, listid = row
+            return ValueSet(v=(x for x, in self._query_all("SELECT value FROM list WHERE listid = ?", (listid,))), t=timestamp)
+        else:
+            return None
+
+    def query_ids(self, criteria):
         query, params = _sql_for_criteria(criteria)
         query = "SELECT obj FROM obj NATURAL JOIN (%s)" % query
         for objid, in self._query_all(query, params):
+            yield objid
+
+    def query(self, criteria):
+        for objid in self.query_ids(criteria):
             yield self[objid]
 
-    def all(self):
+    def all_ids(self):
         for objid, in self._query_all('SELECT DISTINCT obj FROM map NATURAL JOIN obj', ()):
+            yield objid
+
+    def all(self):
+        for objid in self.all_ids():
             yield self[objid]
 
     def list_keys(self, criteria=None):
