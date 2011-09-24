@@ -6,7 +6,7 @@ Item {
     height: directors.height + actors.height
 
     PropertyDisplay {
-        anchors { left: parent.left; right: parent.right }
+        anchors { top: imdb_link.bottom; left: parent.left; right: parent.right }
         id: directors
         name: "Directors"
         text: (tags.director || "")

@@ -224,7 +224,12 @@ class ResultsView(QtDeclarative.QDeclarativeView):
             assets = self.db.query(criteria)
         else:
             assets = self.db.all()
-        assets = sorted(assets, key=lambda x: x['name'].any())
+
+        def sort_key(x):
+            title = x.get('title')
+            title = title and title.any()
+            return title or x['name'].any()
+        assets = sorted(assets, key=sort_key)
 
         bithorde_querier.clear()
         self.model = model = ResultList(self, assets)

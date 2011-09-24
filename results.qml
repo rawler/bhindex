@@ -77,7 +77,9 @@ ListView {
         states: [
             State {
                 name: "selected"
-                PropertyChanges {target: item; height: shortPres.height + briefView.height + fullView.height}
+                PropertyChanges {target: item
+                    height: Math.max(shortPres.height + briefView.height + fullView.height, itemImage.height)
+                }
                 PropertyChanges {target: fullView; sourceComponent: obj.fullView()}
             }
         ]
