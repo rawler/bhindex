@@ -12,13 +12,13 @@ class FilterRule(QtGui.QWidget):
         keybox.addItem('- filter key -', userData=None)
         for key in keys:
             keybox.addItem(key, userData=key)
-        keybox.currentIndexChanged.connect(self.onKeyChanged)
         layout.addWidget(keybox)
+        keybox.currentIndexChanged.connect(self.onKeyChanged)
 
         valuebox = self.valuebox = QtGui.QComboBox(self)
         self.populateValuesForKey(None)
-        valuebox.currentIndexChanged.connect(lambda _: self.onChanged.emit())
         layout.addWidget(valuebox)
+        valuebox.currentIndexChanged.connect(self.onValueChanged)
 
     def populateValuesForKey(self, key):
         self.valuebox.clear()
@@ -32,6 +32,11 @@ class FilterRule(QtGui.QWidget):
         if isinstance(key, int):
             key = self.keybox.itemText(key)
         self.populateValuesForKey(key)
+
+    @QtCore.Slot()
+    def onValueChanged(self, value):
+        if value is None:
+            return
         self.onChanged.emit()
 
     def getRule(self):
