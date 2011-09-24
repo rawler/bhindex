@@ -7,3 +7,5 @@ Movie data is gotten from IMDB, and:
   The Internet Movie Database
   (http://www.imdb.com).
   Used with permission.
+
+TV data is fetched from TheTVDB, using tvdb_api from https://github.com/dbr/tvdb_api
