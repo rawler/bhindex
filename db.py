@@ -127,6 +127,7 @@ def create_DB(conn):
     );
     CREATE INDEX IF NOT EXISTS map_obj ON map (objid);
     CREATE INDEX IF NOT EXISTS map_key ON map (keyid);
+    CREATE INDEX IF NOT EXISTS map_obj_key ON map (objid, keyid);
     CREATE INDEX IF NOT EXISTS map_list ON map (listid);
 
     CREATE TABLE IF NOT EXISTS list (
@@ -168,6 +169,7 @@ class DB(object):
     def __init__(self, config):
         self.conn = sqlite3.connect(config.get('DB', 'file'))
         create_DB(self.conn)
+        self.__idCache = dict()
 
     def _query_all(self, query, args):
         c = self.conn.cursor()
@@ -187,13 +189,17 @@ class DB(object):
             return default
 
     def _getId(self, tbl, id):
-        params = locals()
-        objid = self._query_single("SELECT %(tbl)sid FROM %(tbl)s WHERE %(tbl)s = ?" % params, (id,))
-        if not objid:
-            cursor = self.conn.cursor()
-            cursor.execute("INSERT OR IGNORE INTO %(tbl)s (%(tbl)s) VALUES (?)" % params, (id,))
-            objid = cursor.lastrowid
-        return objid
+        try:
+            return self.__idCache[(tbl, id)]
+        except KeyError:
+            params = locals()
+            objid = self._query_single("SELECT %(tbl)sid FROM %(tbl)s WHERE %(tbl)s = ?" % params, (id,))
+            if not objid:
+                cursor = self.conn.cursor()
+                cursor.execute("INSERT OR IGNORE INTO %(tbl)s (%(tbl)s) VALUES (?)" % params, (id,))
+                objid = cursor.lastrowid
+            self.__idCache[(tbl, id)] = objid
+            return objid
 
     def __getitem__(self, objid):
         obj = Object(objid)
@@ -260,12 +266,15 @@ class DB(object):
         objid = self._getId('obj', obj.id)
 
         for key in obj._dirty:
-            newlistid = self._query_single("SELECT MAX(listid)+1 FROM list") or 1
-            c = cursor.executemany("INSERT INTO list (listid, value) VALUES (?, ?)", ((newlistid, value) for value in _dict[key]))
+            values = _dict[key]
             keyid = self._getId('key', key)
-            cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
-                                VALUES (?, ?, ?, ?)""", 
-                                (objid, keyid, _dict[key].t, newlistid))
+            old_timestamp = self._query_single("SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
+            if not old_timestamp or values.t > old_timestamp:
+                newlistid = self._query_single("SELECT MAX(listid)+1 FROM list") or 1
+                c = cursor.executemany("INSERT INTO list (listid, value) VALUES (?, ?)", ((newlistid, value) for value in _dict[key]))
+                cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
+                                    VALUES (?, ?, ?, ?)""",
+                                    (objid, keyid, _dict[key].t, newlistid))
         obj._dirty.clear()
 
     def commit(self):
