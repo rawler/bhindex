@@ -1,4 +1,5 @@
 from types import MethodType
+from threading import Thread
 
 import pyhorde.bithorde as bithorde
 from pyhorde.bithorde import connectUNIX, reactor, message, b32decode
@@ -66,6 +67,35 @@ class BitHordeIteratorClient(Client):
         self.close()
         reactor.stop()
 
+class QueryThread(Client, Thread):
+    def __init__(self):
+        Thread.__init__(self)
+        self.daemon = True
+        self.start()
+
+    def run(self):
+        bithorde.connectUNIX("/tmp/bithorde", self)
+        bithorde.reactor.run(installSignalHandlers=0)
+
+    def onConnected(self):
+        self._querier = Querier(self, self._callback)
+
+    def _callback(self, asset, status, key):
+        callback, key = key
+        callback(key)
+
+    def start(self):
+        from time import sleep
+        Thread.start(self)
+        while not hasattr(self, '_querier'):
+            sleep(0.05)
+
+    def __call__(self, tiger_id, callback, key):
+        self._querier.submit({bithorde.message.TREE_TIGER: bithorde.b32decode(tiger_id)}, (callback, key))
+
+    def clear(self):
+        self._querier.clear()
+
 if __name__ == '__main__':
     from threading import Thread
     from time import sleep
@@ -74,24 +104,12 @@ if __name__ == '__main__':
     def onResult(asset, status, key):
         print asset, status, key
 
-    class TestClient(Client):
-        def onConnected(self):
-            self.querier = Querier(self, onResult)
-
-    def bh_main(c):
-        connectUNIX("/tmp/bithorde", c)
-        reactor.run(installSignalHandlers=0)
 
     if len(sys.argv) > 1:
         assetIds = (({message.TREE_TIGER: b32decode(asset)}, asset) for asset in sys.argv[1:])
 
-        c = TestClient()
-        t = Thread(target=bh_main, args=(c,))
-        t.daemon = True
-        t.start()
+        querier = QueryThread()
 
-        while not hasattr(c, 'querier'):
-            sleep(0.1)
 
         querier = c.querier
         for hashId, key in assetIds:
