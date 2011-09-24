@@ -9,7 +9,7 @@ import subprocess
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config, export_txt, export_links, magnet
+import db, config, export_txt, export_links, magnet, scraper
 
 config = config.read()
 
@@ -37,7 +37,7 @@ def bh_upload(file):
         except ValueError:
             continue
         if proto == 'magnet':
-            return magnet.objectFromMagnet(line.strip().decode('utf8'))
+            return magnet.objectFromMagnet(line.strip().decode('utf8'), fullPath=unicode(file))
     return None
 
 if __name__ == '__main__':
@@ -74,6 +74,7 @@ if __name__ == '__main__':
         file = path.normpath(file)
         name = options.sanitizer(file)
         mtime = path.getmtime(file)
+        tags = tags or {}
 
         if not options.force:
             oldassets = DB.query({'name': name})
