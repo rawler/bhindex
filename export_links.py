@@ -22,7 +22,7 @@ def main(check_timestamp=False):
     if check_timestamp == True:
         check_timestamp = path.exists(TIMEREF) and path.getmtime(TIMEREF)
 
-    for asset in DB.query({'path': db.ANY, 'name': db.ANY, 'xt': db.ANY}):
+    for asset in DB.query({'path': db.ANY, 'xt': db.ANY}):
         if check_timestamp and (asset.timestamp() < check_timestamp):
             continue
 

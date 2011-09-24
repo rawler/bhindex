@@ -17,7 +17,7 @@ LINKDIR = config.get('LINKSEXPORT', 'linksdir')
 UNIXSOCKET = config.get('BITHORDE', 'unixsocket')
 
 def readMagnetAssets(input):
-    t = time()
+    t = None
     for line in input:
         if line.startswith('magnet:'):
             asset = magnet.objectFromMagnet(line.strip().decode('utf8'), t)
