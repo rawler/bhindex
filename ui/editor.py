@@ -1,7 +1,7 @@
 from PySide import QtCore, QtGui
 from time import time
 
-import db
+import db, scraper
 
 class PropertyEditor(QtGui.QWidget):
     def __init__(self, parent, k, v):
@@ -17,9 +17,10 @@ class PropertyEditor(QtGui.QWidget):
         return self.valueBox.text()
 
 class ItemEditor(QtGui.QDialog):
-    def __init__(self, parent, db, uiitem):
+    def __init__(self, parent, db, model, uiitem):
         QtGui.QDialog.__init__(self, parent)
         self.db = db
+        self.model = model
         self.uiitem = uiitem
         self.asset = uiitem.asset
         self.setWindowTitle("%s (%s)" % (uiitem.title, uiitem.asset.id))
@@ -33,13 +34,23 @@ class ItemEditor(QtGui.QDialog):
 
         self.addItemButton = buttons.addButton("Add Key", buttons.ActionRole)
         self.addItemButton.clicked.connect(self.addKey)
+        self.scrapeButton = buttons.addButton("Scrape Remote", buttons.ActionRole)
+        self.scrapeButton.clicked.connect(self.scrape)
         buttons.button(QtGui.QDialogButtonBox.Ok).clicked.connect(self.onOK)
         buttons.button(QtGui.QDialogButtonBox.Cancel).clicked.connect(self.close)
 
-        for k, values in sorted(uiitem.asset.iteritems()):
+        self._reload()
+        self.show()
+
+    def _reload(self):
+        for item in self.items:
+            self.itemLayout.removeWidget(item)
+            item.deleteLater()
+
+        self.items = []
+        for k, values in sorted(self.asset.iteritems()):
             for v in values:
                 self._addItem(k, v)
-        self.show()
 
     def _addItem(self, k, v):
         item = PropertyEditor(self, k, v)
@@ -54,6 +65,10 @@ class ItemEditor(QtGui.QDialog):
             self._addItem(key, "")
 
     def onOK(self):
+        self.save()
+        self.close()
+
+    def save(self):
         new_obj = dict()
         t = time()
         for item in self.items:
@@ -70,8 +85,14 @@ class ItemEditor(QtGui.QDialog):
                 del obj[k]
         self.db.update(obj)
         self.db.commit()
-        self.close()
+
+    def scrape(self):
+        self.save()
+        if scraper.scrape_for(self.asset):
+            self.db.update(self.asset)
+        self._reload()
 
     def close(self):
-        self.uiitem.asset = self.db[self.asset.id]
+        self.uiitem.setAsset(self.db[self.asset.id])
+        self.model.signalChanged(self.uiitem)
         QtGui.QWidget.close(self)

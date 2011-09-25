@@ -44,6 +44,11 @@ class ResultList(QtCore.QAbstractListModel):
                 return x(obj)
         assert False
 
+    def signalChanged(self, item):
+        for i,x in enumerate(self._list):
+            if x == item:
+                self.dataChanged.emit(self.createIndex(i,0), self.createIndex(i,0))
+
     def canFetchMore(self, _):
         return bool(self._unfiltered)
 
@@ -159,4 +164,4 @@ class ResultsView(QtDeclarative.QDeclarativeView):
 
     def editAsset(self, guiitem):
         asset = guiitem.asset
-        edit = ItemEditor(self.parent(), self.db, guiitem)
+        edit = ItemEditor(self.parent(), self.db, self.model, guiitem)

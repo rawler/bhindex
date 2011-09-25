@@ -4,8 +4,14 @@ import sys, os.path
 class ItemPresentation(QtCore.QObject):
     def __init__(self, asset):
         QtCore.QObject.__init__(self)
+        self.setAsset(asset)
+
+    def setAsset(self, asset):
         self.asset = asset
         self.__tags = None
+        self.tagsChanged.emit()
+        self.titleChanged.emit()
+        self.imageUriChanged.emit()
 
     def _tags(self):
         if not self.__tags:

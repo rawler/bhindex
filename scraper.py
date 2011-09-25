@@ -39,7 +39,7 @@ def imdb_scraper(obj, id):
 def imdb_search(obj):
     if not ia:
         print "WARNING: failed to scrape from imdb due to missing library imdbpy."
-        return
+        return False
     for title in obj['title']:
         movies = ia.search_movie(title)
         for movie in movies:
