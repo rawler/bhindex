@@ -10,6 +10,7 @@ from bithorde import QueryThread
 bithorde_querier = QueryThread()
 
 from presentation import default, movies, series
+from editor import ItemEditor
 
 PRESENTATIONS = (series.Presentation, movies.Presentation, default.Presentation)
 
@@ -97,8 +98,7 @@ class ResultsView(QtDeclarative.QDeclarativeView):
         self.db = db
 
         self.setResizeMode(self.SizeRootObjectToView)
-        self.setAutoFillBackground(False)
-        self.setStyleSheet("background:transparent;");
+        self.setStyleSheet("background:transparent;")
         self.rootContext().setContextProperty("myModel", [])
         self.setSource(QtCore.QUrl("results.qml"))
 
@@ -106,6 +106,7 @@ class ResultsView(QtDeclarative.QDeclarativeView):
             vis.loadComponents(self.engine())
 
         self.rootObject().runAsset.connect(self.runAsset)
+        self.rootObject().editAsset.connect(self.editAsset)
         self.dragStart = None
 
     def refresh(self, criteria):
@@ -155,3 +156,7 @@ class ResultsView(QtDeclarative.QDeclarativeView):
     def runAsset(self, guiitem):
         asset = guiitem.asset
         subprocess.Popen(['xdg-open', fuseForAsset(asset)])
+
+    def editAsset(self, guiitem):
+        asset = guiitem.asset
+        edit = ItemEditor(self.parent(), self.db, guiitem)

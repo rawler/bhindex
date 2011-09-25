@@ -70,6 +70,14 @@ class Object(object):
             self._dirty.add(key)
             self._dict[key] = value
 
+    def __delitem__(self, key):
+        assert isinstance(key, unicode)
+
+        if key in self._dict:
+            self._dirty.add(key)
+            self._dict[key].clear()
+            self._dict[key].t = time()
+
     def iteritems(self):
         return self._dict.iteritems()
 

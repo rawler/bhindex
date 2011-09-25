@@ -7,6 +7,7 @@ ListView {
     property color hoverColor: Qt.rgba(1.,1.,1.,0.3)
 
     signal runAsset(variant asset)
+    signal editAsset(variant asset)
 
     delegate: Rectangle {
         id: item
@@ -19,11 +20,11 @@ ListView {
             hoverEnabled: true
             onClicked: {
                 if (item.state == "selected")
-                    item.state = ""
+                    item.state = "";
                 else
-                    item.state = "selected"
+                    item.state = "selected";
             }
-            onDoubleClicked: runAsset(obj)
+            onDoubleClicked: editAsset(obj)
         }
         color: mouse.containsMouse ? hoverColor : itemColor
         property variant itemObj: obj

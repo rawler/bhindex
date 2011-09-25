@@ -40,6 +40,7 @@ if __name__=='__main__':
 
     mainwindow = QtGui.QMainWindow()
     mainwindow.resize(600,400)
+    mainwindow.setWindowTitle("BitHorde Index")
     mainwindow.show()
 
     def onFilterChanged():
