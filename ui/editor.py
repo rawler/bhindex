@@ -8,6 +8,7 @@ class PropertyEditor(QtGui.QWidget):
         QtGui.QWidget.__init__(self, parent)
         self.key = k
         layout = QtGui.QHBoxLayout(self)
+        layout.setContentsMargins(0,0,0,0)
         self.keyBox = QtGui.QLabel(k, self)
         layout.addWidget(self.keyBox)
         self.valueBox = QtGui.QLineEdit(v, self)
@@ -25,8 +26,9 @@ class ItemEditor(QtGui.QDialog):
         self.asset = uiitem.asset
         self.setWindowTitle("%s (%s)" % (uiitem.title, uiitem.asset.id))
         layout = QtGui.QVBoxLayout(self)
-        self.itemLayout = QtGui.QVBoxLayout()
         self.items = []
+        self.itemLayout = QtGui.QVBoxLayout()
+        self.itemLayout.setSpacing(0)
         layout.addLayout(self.itemLayout)
         layout.addStretch(2)
         buttons = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel, parent=self)
