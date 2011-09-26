@@ -75,10 +75,13 @@ class ItemEditor(QtGui.QDialog):
         t = time()
         for item in self.items:
             k = item.key
+            v = item.value()
+            if not v:
+                continue
             if k in new_obj:
-                new_obj[k].add(item.value())
+                new_obj[k].add(v)
             else:
-                new_obj[k] = db.ValueSet([item.value()], t=t)
+                new_obj[k] = db.ValueSet([v], t=t)
         obj = self.asset
         for k,v in new_obj.iteritems():
             obj[k] = v
