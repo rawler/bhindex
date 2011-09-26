@@ -24,7 +24,6 @@ ListView {
                 else
                     item.state = "selected";
             }
-            onDoubleClicked: editAsset(obj)
         }
         color: mouse.containsMouse ? hoverColor : itemColor
         property variant itemObj: obj
@@ -36,6 +35,31 @@ ListView {
             y: 4
             fillMode: Image.PreserveAspectFit
             smooth: true
+        }
+        Column {
+            id: itemButtons
+            opacity: 0.0
+            visible: false
+            anchors.left: categoryIconView.left
+            anchors.top: categoryIconView.bottom
+            spacing: 2
+
+            Button {
+                id: playbutton
+                width: 32
+                height: 32
+
+                icon: "open.png"
+                onClicked: runAsset(obj)
+            }
+            Button {
+                id: editbutton
+                width: 32
+                height: 32
+
+                icon: "edit.png"
+                onClicked: editAsset(obj)
+            }
         }
         Text {
             id: shortPres
@@ -82,11 +106,16 @@ ListView {
                     height: Math.max(shortPres.height + briefView.height + fullView.height, itemImage.height)
                 }
                 PropertyChanges {target: fullView; sourceComponent: obj.fullView()}
+                PropertyChanges {target: itemButtons
+                    visible: true
+                    opacity: 1.0
+                }
             }
         ]
 
         transitions: Transition {
           PropertyAnimation { properties: "width,height"; duration: 250; easing.type: Easing.InOutQuad}
+          PropertyAnimation { properties: "opacity"; duration: 250; easing.type: Easing.InOutQuad}
         }
     }
 }
