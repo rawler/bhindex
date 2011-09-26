@@ -23,14 +23,24 @@ def imdb_scraper(obj, id):
     movie = ia.get_movie(id)
     if movie:
         t = time()
+        def map_item(localName, name, filter=unicode):
+            val = movie.get(name)
+            if val:
+                obj.update_key(localName, filter(movie[name]), t)
+            else:
+                print "No match"
         obj.update_key(u'imdb', unicode(id), t)
-        obj.update_key(u'rating', unicode(movie['rating']), t)
-        obj.update_key(u'name', movie['title'], t)
-        obj.update_key(u'image', movie.get('cover url', ()), t)
-        obj.update_key(u'year', unicode(movie['year']), t)
-        obj.update_key(u'director', (p['name'] for p in movie['director']), t)
-        obj.update_key(u'genre', movie['genres'], t)
-        obj.update_key(u'actor', (p['name'] for p in movie['cast']), t)
+        map_item(u'rating', 'rating')
+        map_item(u'title', 'title')
+        map_item(u'image', 'cover url')
+        map_item(u'year', 'year')
+        map_item(u'genre', 'genres', set)
+        directors = movie.get('directors')
+        if directors:
+            obj.update_key(u'director', (p['name'] for p in directors), t)
+        cast = movie.get('cast')
+        if cast:
+            obj.update_key(u'actor', (p['name'] for p in cast), t)
         return True
     else:
         print "Movie not found in IMDB"
