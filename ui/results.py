@@ -1,4 +1,4 @@
-import os, subprocess
+import os, os.path, subprocess
 
 from PySide import QtCore, QtDeclarative, QtGui
 from PySide.QtCore import Qt
@@ -15,6 +15,8 @@ from editor import ItemEditor
 PRESENTATIONS = (series.Presentation, movies.Presentation, default.Presentation)
 
 BHFUSE_MOUNT = config.get('BITHORDE', 'fusedir')
+HERE = os.path.dirname(__file__)
+
 def fuseForAsset(asset):
     magnetUrl = magnet.fromDbObject(asset)
     return os.path.join(BHFUSE_MOUNT, magnetUrl)
@@ -105,7 +107,7 @@ class ResultsView(QtDeclarative.QDeclarativeView):
         self.setResizeMode(self.SizeRootObjectToView)
         self.setStyleSheet("background:transparent;")
         self.rootContext().setContextProperty("myModel", [])
-        self.setSource(QtCore.QUrl("results.qml"))
+        self.setSource(QtCore.QUrl(os.path.join(HERE, "qml", "Results.qml")))
 
         for vis in PRESENTATIONS:
             vis.loadComponents(self.engine())
