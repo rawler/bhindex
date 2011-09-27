@@ -3,6 +3,7 @@ from threading import Thread
 
 import pyhorde.bithorde as bithorde
 from pyhorde.bithorde import connectUNIX, reactor, message, b32decode
+import pyhorde.bithorde_pb2 as message
 
 import config
 
@@ -82,7 +83,7 @@ class QueryThread(Client, Thread):
 
     def _callback(self, asset, status, key):
         callback, key = key
-        callback(key)
+        callback(asset, status, key)
 
     def start(self):
         from time import sleep
@@ -109,7 +110,6 @@ if __name__ == '__main__':
         assetIds = (({message.TREE_TIGER: b32decode(asset)}, asset) for asset in sys.argv[1:])
 
         querier = QueryThread()
-
 
         querier = c.querier
         for hashId, key in assetIds:

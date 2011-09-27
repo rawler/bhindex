@@ -75,7 +75,7 @@ ListView {
         }
         Image {
             id: itemImage
-            source: imageUri
+            source: imageUri || ''
             height: 128
             anchors { right: parent.right; top: parent.top }
             fillMode: Image.PreserveAspectFit

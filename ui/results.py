@@ -6,7 +6,7 @@ from PySide.QtCore import Qt
 import config, magnet
 config = config.read()
 
-from bithorde import QueryThread
+from bithorde import QueryThread, message
 bithorde_querier = QueryThread()
 
 from presentation import default, movies, series
@@ -63,16 +63,17 @@ class ResultList(QtCore.QAbstractListModel):
             i += 1
             if i > 15: break
 
-    def _queueAppend(self, assetid):
-        event = QtCore.QEvent(QtCore.QEvent.User)
-        event.assetid = assetid
-        QtCore.QCoreApplication.postEvent(self, event)
+    def _queueAppend(self, asset, status, assetid):
+        if status.status == message.SUCCESS:
+            event = QtCore.QEvent(QtCore.QEvent.User)
+            event.assetid = assetid
+            QtCore.QCoreApplication.postEvent(self, event)
 
     def event(self, event):
         if event.type()==QtCore.QEvent.User and hasattr(event, 'assetid'):
             self._append(event.assetid)
             return True
-        return QtDeclarative.QDeclarativeView.event(self, event)
+        return QtCore.QAbstractListModel.event(self, event)
 
     def _append(self, assetid):
         pos = len(self._list)
