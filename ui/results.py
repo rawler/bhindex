@@ -15,6 +15,7 @@ from editor import ItemEditor
 PRESENTATIONS = (series.Presentation, movies.Presentation, default.Presentation)
 
 BHFUSE_MOUNT = config.get('BITHORDE', 'fusedir')
+BITHORDE_PRESSURE = int(config.get('BITHORDE', 'pressure'))
 HERE = os.path.dirname(__file__)
 
 def fuseForAsset(asset):
@@ -30,6 +31,7 @@ class ResultList(QtCore.QAbstractListModel):
         self._unfiltered = iter(results)
         self._list = list()
         self._db = db
+        self._desiredRequests = 0
         QtCore.QAbstractListModel.__init__(self, parent)
         self.setRoleNames({
             Qt.DisplayRole: "title",
@@ -52,22 +54,32 @@ class ResultList(QtCore.QAbstractListModel):
                 self.dataChanged.emit(self.createIndex(i,0), self.createIndex(i,0))
 
     def canFetchMore(self, _):
-        return bool(self._unfiltered)
+        return self._desiredRequests < BITHORDE_PRESSURE
 
     def fetchMore(self, _):
-        i = 0
-        for id in self._unfiltered:
-            if not id.startswith('tree:tiger:'):
-                continue
-            bithorde_querier(id[len('tree:tiger:'):], self._queueAppend, id)
-            i += 1
-            if i > 15: break
+        self._desiredRequests = BITHORDE_PRESSURE
+        self._tryFetch()
+
+    def _tryFetch(self):
+        try:
+            while self._desiredRequests > 0:
+                id = self._unfiltered.next()
+                if not id.startswith('tree:tiger:'):
+                    continue
+                bithorde_querier(id[len('tree:tiger:'):], self._queueAppend, id)
+
+                self._desiredRequests -= 1
+        except StopIteration:
+            pass
 
     def _queueAppend(self, asset, status, assetid):
         if status.status == message.SUCCESS:
             event = QtCore.QEvent(QtCore.QEvent.User)
             event.assetid = assetid
             QtCore.QCoreApplication.postEvent(self, event)
+        else:
+            self._desiredRequests += 1
+        self._tryFetch()
 
     def event(self, event):
         if event.type()==QtCore.QEvent.User and hasattr(event, 'assetid'):
