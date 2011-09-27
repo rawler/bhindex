@@ -27,7 +27,7 @@ def main(check_timestamp=False):
             continue
 
         for p in asset['path']:
-            dst = path.normpath(path.join(LINKDIR, p))
+            dst = path.normpath(path.join(LINKDIR, p)).encode('utf8')
             if not dst.startswith(LINKDIR):
                 print "Warning! %s tries to break out of directory!"
                 continue
