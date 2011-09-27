@@ -94,7 +94,7 @@ if __name__ == '__main__':
                 asset[k] = v
             scraper.scrape_for(asset)
             for k,v in sorted(asset.iteritems()):
-                print u"%s: %s" % (k, v.join())
+                print (u"%s: %s" % (k, v.join())).encode('utf-8')
             DB.update(asset)
         else:
             print "Error adding %s" % file
