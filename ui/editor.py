@@ -26,18 +26,26 @@ class ItemEditor(QtGui.QDialog):
         self.asset = uiitem.asset
         self.setWindowTitle("%s (%s)" % (uiitem.title, uiitem.asset.id))
         layout = QtGui.QVBoxLayout(self)
+
+        self.scrollArea = QtGui.QScrollArea(self)
         self.items = []
-        self.itemLayout = QtGui.QVBoxLayout()
+        self.itemPane = QtGui.QWidget(self.scrollArea)
+        self.itemLayout = QtGui.QVBoxLayout(self.itemPane)
         self.itemLayout.setSpacing(0)
-        layout.addLayout(self.itemLayout)
-        layout.addStretch(2)
+
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setWidget(self.itemPane)
+
+        layout.addWidget(self.scrollArea)
         buttons = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel, parent=self)
         layout.addWidget(buttons)
 
-        self.addItemButton = buttons.addButton("Add Key", buttons.ActionRole)
+        self.addItemButton = buttons.addButton(self.tr("Add"), buttons.ActionRole)
         self.addItemButton.clicked.connect(self.addKey)
-        self.scrapeButton = buttons.addButton("Scrape Remote", buttons.ActionRole)
+        self.addItemButton.setToolTip(self.tr("Add a property. Leaving a property blank will remove it."))
+        self.scrapeButton = buttons.addButton(self.tr("Auto-Fill"), buttons.ActionRole)
         self.scrapeButton.clicked.connect(self.scrape)
+        self.scrapeButton.setToolTip(self.tr("Try to auto-fetch properties from remote data-sources."))
         buttons.button(QtGui.QDialogButtonBox.Ok).clicked.connect(self.onOK)
         buttons.button(QtGui.QDialogButtonBox.Cancel).clicked.connect(self.close)
 
@@ -55,7 +63,7 @@ class ItemEditor(QtGui.QDialog):
                 self._addItem(k, v)
 
     def _addItem(self, k, v):
-        item = PropertyEditor(self, k, v)
+        item = PropertyEditor(self.itemPane, k, v)
         self.itemLayout.addWidget(item)
         self.items.append(item)
 
@@ -70,7 +78,7 @@ class ItemEditor(QtGui.QDialog):
         self.save()
         self.close()
 
-    def save(self):
+    def _updateAsset(self):
         new_obj = dict()
         t = time()
         for item in self.items:
@@ -88,11 +96,14 @@ class ItemEditor(QtGui.QDialog):
         for k,v in obj.iteritems():
             if k not in new_obj:
                 del obj[k]
-        self.db.update(obj)
+
+    def save(self):
+        self._updateAsset()
+        self.db.update(self.asset)
         self.db.commit()
 
     def scrape(self):
-        self.save()
+        self._updateAsset()
         if scraper.scrape_for(self.asset):
             self.db.update(self.asset)
         self._reload()
