@@ -293,30 +293,6 @@ class DB(object):
             #self.conn.execute("DELETE FROM list WHERE list.id = ?", (x,))
         pass
 
-    def dir(self, attr, prefix=[], **criteria):
-        '''Return the sub-partitions of attr from items in DB. I.E. for a DB containing
-        prefix=(a/a, a/b, b/a, c/a), db.partition("prefix") will return set('a','b','c').'''
-        assert attr=="path", "Sorry, only path supported ATM."
-        assert attr not in criteria
-        result = dict()
-        if prefix:
-            criteria[attr] = Starts('/'.join(prefix))
-            plen = len(prefix)
-        else:
-            criteria[attr] = self.ANY
-            plen = 0
-
-        for obj in self.query(criteria):
-            for k in obj[attr]:
-                k = path_str2lst(k)
-                k = k[plen]
-                if k in result:
-                    result[k] += 1
-                else:
-                    result[k] = 1
-
-        return result
-
 def open(config):
     return DB(config)
 
