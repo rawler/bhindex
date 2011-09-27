@@ -77,7 +77,7 @@ if __name__ == '__main__':
         tags = tags or {}
 
         if not options.force:
-            oldassets = DB.query({'name': name})
+            oldassets = DB.query({'path': name})
             found_up2date = False
             for a in oldassets:
                 if a['name'].t >= mtime:
