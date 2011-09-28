@@ -46,7 +46,8 @@ class ctr(object):
 
 def main():
     DB = db.open(config)
-    outfile = open(TXTPATH, 'w')
+    tmppath = TXTPATH + ".tmp"
+    outfile = open(tmppath, 'w')
     count=ctr()
 
     def onStatusUpdate(asset, status, db_asset):
@@ -63,6 +64,8 @@ def main():
 
     outfile.write(']')
     outfile.close()
+
+    os.rename(tmppath, TXTPATH)
 
 if __name__=='__main__':
     main()
