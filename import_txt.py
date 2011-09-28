@@ -35,6 +35,9 @@ def readJSON(input):
         elif d['_type'] == 'db.Object' and 'xt' in d:
             x = db.Object(d['xt'].any())
             del d['_type']
+            for key in d:
+                if key[0] == '@':
+                    del d[key]
             x.update(d)
             return x
         else:

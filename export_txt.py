@@ -30,7 +30,7 @@ class Encoder(json.JSONEncoder):
                     'values': list(o)}
         if isinstance(o, db.Object):
             x = {'_type': 'db.Object'}
-            x.update(o._dict)
+            x.update((k,v) for k,v in o._dict.iteritems() if not k[0] == '@')
             return x
         else:
             return self.default(o)
