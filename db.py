@@ -304,6 +304,7 @@ class DB(object):
             self.conn.execute("DELETE FROM key WHERE key.keyid = ?", (x,))
         for x, in self._query_all("SELECT DISTINCT obj.objid FROM obj LEFT JOIN map ON (obj.objid = map.objid) WHERE map.objid IS NULL", ()):
             self.conn.execute("DELETE FROM obj WHERE obj.objid = ?", (x,))
+        self.conn.execute("VACUUM")
 
 def open(config):
     return DB(config)
