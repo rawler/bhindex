@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os, os.path as path, sys, json
+import os, os.path as path, shutil, sys, json
 from ConfigParser import ConfigParser
 import subprocess
 
@@ -46,7 +46,7 @@ class ctr(object):
 
 def main():
     DB = db.open(config)
-    tmppath = TXTPATH + ".tmp"
+    tmppath = TXTPATH+".tmp"
     outfile = open(tmppath, 'w')
     count=ctr()
 
@@ -65,6 +65,8 @@ def main():
     outfile.write(']')
     outfile.close()
 
+    if os.path.exists(TXTPATH):
+        shutil.copymode(TXTPATH, tmppath)
     os.rename(tmppath, TXTPATH)
 
 if __name__=='__main__':
