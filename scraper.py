@@ -106,11 +106,11 @@ def tvdb_search(obj):
     return res
 
 def scrape_for(obj):
-    if 'imdb' in obj:
+    if obj.get('imdb'):
         return imdb_scraper(obj, obj['imdb'].any())
-    elif 'title' in obj and 'year' in obj:
+    elif obj.get('title') and obj.get('year'):
         return imdb_search(obj)
-    elif 'series' in obj and 'season' in obj and 'episode' in obj:
+    elif obj.get('series') and obj.get('season') and obj.get('episode'):
         return tvdb_search(obj)
 
 if __name__ == '__main__':
