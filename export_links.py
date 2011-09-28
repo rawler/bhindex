@@ -5,6 +5,7 @@ import os, os.path as path, sys
 from ConfigParser import ConfigParser
 from optparse import OptionParser
 import subprocess
+from time import time
 
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
@@ -13,17 +14,14 @@ import db, config, magnet
 config = config.read()
 
 LINKDIR = path.normpath(config.get('LINKSEXPORT', 'linksdir'))
-TIMEREF = path.join(LINKDIR, ".last_import")
 BHFUSEDIR = config.get('BITHORDE', 'fusedir')
 
-def main(check_timestamp=False):
+def main(force_all=False):
     DB = db.open(config)
 
-    if check_timestamp == True:
-        check_timestamp = path.exists(TIMEREF) and path.getmtime(TIMEREF)
-
+    t = time()
     for asset in DB.query({'path': db.ANY, 'xt': db.ANY}):
-        if check_timestamp and (asset.timestamp() < check_timestamp):
+        if asset.get(u'@linked') and not force_all:
             continue
 
         for p in asset['path']:
@@ -47,15 +45,15 @@ def main(check_timestamp=False):
             if not path.exists(dstdir):
                 os.makedirs(dstdir)
             os.symlink(tgt, dst)
-
-    with open(TIMEREF, 'a'):
-        os.utime(TIMEREF, None)
+        asset[u'@linked'] = db.ValueSet((u'true',), t=t)
+        DB.update(asset)
+    DB.commit()
 
 if __name__=='__main__':
     parser = OptionParser()
-    parser.add_option("-T", "--ignore-timestamps", action="store_false",
-                      dest="check_timestamp", default=True,
-                      help="Normally, only links with timestamps higher than the last sync are added. This removes that check, adding ALL links.")
+    parser.add_option("-T", "--force-all", action="store_true",
+                      dest="force_all", default=False,
+                      help="Normally, only links not marked with @linked in db, added. This removes that check, adding ALL links.")
     (options, args) = parser.parse_args()
 
-    main(options.check_timestamp)
+    main(options.force_all)
