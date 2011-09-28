@@ -2,6 +2,7 @@
 from urlparse import urlparse, parse_qs
 from urllib import quote_plus as urlquote
 import cPickle as pickle
+import hashlib, struct
 from time import time
 
 import bithorde
@@ -41,6 +42,12 @@ class ValueSet(set):
     def join(self, sep=u', '):
         return unicode(sep).join(self)
     __unicode__ = __str__ = join
+
+    def gen_id(self):
+        m = hashlib.sha1()
+        for x in sorted(self):
+            m.update(x.encode('utf8'))
+        return struct.unpack("!Q", m.digest()[:8])[0]
 
 class Object(object):
     def __init__(self, objid, init={}):
@@ -141,7 +148,8 @@ def create_DB(conn):
     CREATE TABLE IF NOT EXISTS list (
         itemid INTEGER PRIMARY KEY AUTOINCREMENT,
         listid INTEGER NOT NULL,
-        value TEXT NOT NULL
+        value TEXT NOT NULL,
+        CONSTRAINT unique_list_value UNIQUE (listid, value) ON CONFLICT IGNORE
     );
     CREATE INDEX IF NOT EXISTS list_id ON list (listid);
     CREATE INDEX IF NOT EXISTS list_value ON list (value);
@@ -278,8 +286,9 @@ class DB(object):
             keyid = self._getId('key', key)
             old_timestamp = self._query_single("SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
             if not old_timestamp or values.t > old_timestamp:
-                newlistid = self._query_single("SELECT MAX(listid)+1 FROM list") or 1
-                c = cursor.executemany("INSERT INTO list (listid, value) VALUES (?, ?)", ((newlistid, value) for value in _dict[key]))
+                newlistid = str(values.gen_id())
+                if not self._query_first("SELECT listid FROM list WHERE listid = ?", (newlistid,)):
+                    c = cursor.executemany("INSERT INTO list (listid, value) VALUES (?, ?)", ((newlistid, value) for value in _dict[key]))
                 cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
                                     VALUES (?, ?, ?, ?)""",
                                     (objid, keyid, _dict[key].t, newlistid))
@@ -289,9 +298,12 @@ class DB(object):
         self.conn.commit()
 
     def vacuum(self):
-        #for x, in self._query_all("SELECT DISTINCT list.id FROM list LEFT JOIN map ON (map.listid = list.id) WHERE map.listid IS NULL", ()):
-            #self.conn.execute("DELETE FROM list WHERE list.id = ?", (x,))
-        pass
+        for x, in self._query_all("SELECT DISTINCT list.listid FROM list LEFT JOIN map ON (map.listid = list.listid) WHERE map.listid IS NULL", ()):
+            self.conn.execute("DELETE FROM list WHERE listid = ?", (x,))
+        for x, in self._query_all("SELECT DISTINCT key.keyid FROM key LEFT JOIN map ON (key.keyid = map.keyid) WHERE map.keyid IS NULL", ()):
+            self.conn.execute("DELETE FROM key WHERE key.keyid = ?", (x,))
+        for x, in self._query_all("SELECT DISTINCT obj.objid FROM obj LEFT JOIN map ON (obj.objid = map.objid) WHERE map.objid IS NULL", ()):
+            self.conn.execute("DELETE FROM obj WHERE obj.objid = ?", (x,))
 
 def open(config):
     return DB(config)
