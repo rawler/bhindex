@@ -116,6 +116,8 @@ class ItemEditor(QtGui.QDialog):
         self._updateAsset()
         if scraper.scrape_for(self.asset):
             self.db.update(self.asset)
+        else:
+            print "Scraping failed"
         self._reload()
 
     def close(self):

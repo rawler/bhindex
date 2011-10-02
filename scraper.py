@@ -14,7 +14,6 @@ except ImportError:
 HERE = os.path.dirname(__file__)
 sys.path.append(os.path.join(HERE, "tvdb_api"))
 import tvdb_api
-tvdb = tvdb_api.Tvdb()
 
 def imdb_scraper(obj, id):
     if not ia:
@@ -35,7 +34,7 @@ def imdb_scraper(obj, id):
             if val:
                 obj.update_key(localName, filter(movie[name]), t)
             else:
-                print "No match"
+                print u"No match for %s" % name
         obj.update_key(u'imdb', unicode(id), t)
         map_item(u'rating', 'rating')
         map_item(u'title', 'title')
@@ -69,33 +68,60 @@ def imdb_search(obj):
     return False
 
 def tvdb_search(obj):
-    res = False
+    lang = obj.get('language')
+    tvdb = tvdb_api.Tvdb(language=lang)
+
     def iter_series():
+        res = False
+        if 'series_tvdbid' in obj:
+            for seriesid in obj['series_tvdbid']:
+                try:
+                    res = iter_seasons(tvdb[seriesid]) or res
+                except tvdb_api.tvdb_shownotfound:
+                    pass
+        if res: return res
         for series in obj['series']:
             try:
-                iter_seasons(tvdb[series])
+                year = obj.get('year')
+                if year:
+                    series = "%s (%s)" % (series, year)
+                res = iter_seasons(tvdb[series]) or res
             except tvdb_api.tvdb_shownotfound:
                 pass
+        return res
     def iter_seasons(series):
+        res = False
         for season in obj['season']:
             try:
-                iter_episodes(series, series[int(season)])
+                res = iter_episodes(series, series[int(season)]) or res
             except tvdb_api.tvdb_seasonnotfound:
                 pass
+        return res
     def iter_episodes(series, season):
+        res = False
         for episode in obj['episode']:
             try:
-                map(series, season, season[int(episode)])
+                res = map(series, season, season[int(episode)]) or res
             except tvdb_api.tvdb_episodenotfound:
                 pass
-
+        return res
     def map(series, season, episode):
         def trim_split(str, delim='|'):
             return (x for x in str.split(delim) if x)
+        def genre_split(str):
+            res = set()
+            for x in trim_split(str):
+                for y in x.split(' and '):
+                    res.add(y.strip())
+            return res
         t = time()
-        def map_item(localName, dict, name, filter=unicode):
-            if name in dict and dict[name]:
-                obj.update_key(localName, filter(dict[name]), t)
+        def map_item(localName, remote_dict, name, filter=unicode):
+            try:
+                value = remote_dict[name]
+            except tvdb_api.tvdb_attributenotfound:
+                return
+            if value:
+                obj.update_key(localName, filter(value), t)
 
         obj.update_key(u'episode_tvdbid', unicode(episode['id']))
 
@@ -106,13 +132,14 @@ def tvdb_search(obj):
         map_item(u'director', episode, 'director', trim_split)
         map_item(u'writer', episode, 'writer', trim_split)
 
+        obj.update_key(u'series_tvdbid', unicode(series['id']))
         map_item(u'actor', series, 'actors', trim_split)
-        map_item(u'genre', series, 'genre', trim_split)
+        map_item(u'genre', series, 'genre', genre_split)
         map_item(u'image', series, 'poster', trim_split)
         map_item(u'rating', series, 'rating', trim_split)
-        res = True
-    iter_series()
-    return res
+        return True
+
+    return iter_series()
 
 def scrape_for(obj):
     if obj.get('imdb'):
