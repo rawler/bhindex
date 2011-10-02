@@ -4,4 +4,10 @@ class Presentation(ItemPresentation):
     CRITERIA = {'series': None}
 
     def getTitle(self):
-        return "%(series)s - %(season)sx%(episode)s" % self.asset
+        a = self.asset
+        series = a.get('series')
+        season = a.get('season')
+        episode = a.get('episode')
+        epname = a.get('episode_name', '')
+        epname = epname and (" - "+epname.any())
+        return "%s - %sx%s%s" % (series, season, episode, epname)

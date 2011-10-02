@@ -65,7 +65,7 @@ ListView {
             id: shortPres
             anchors {
                 left: categoryIconView.right
-                right: itemImage.right
+                right: itemImage.left
                 top: parent.top
             }
             text: title
