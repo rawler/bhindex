@@ -2,22 +2,19 @@ import QtQuick 1.0
 
 import ".."
 
-Item {
-    height: directors.height + actors.height
-
+Column {
     PropertyDisplay {
         anchors { left: parent.left; right: parent.right }
-        id: directors
+        name: "Plot"
+        text: (tags.plot || "")
+    }
+    PropertyDisplay {
+        anchors { left: parent.left; right: parent.right }
         name: "Directors"
         text: (tags.director || "")
     }
     PropertyDisplay {
-        id: actors
-        anchors {
-            top: directors.bottom
-            left: parent.left
-            right: parent.right
-        }
+        anchors { left: parent.left; right: parent.right }
         name: "Actors"
         text: (tags.actor || "")
     }

@@ -128,12 +128,14 @@ def tvdb_search(obj):
 
         obj.update_key(u'episode_tvdbid', unicode(episode['id']))
 
-        map_item(u'rating', episode, 'rating')
+        map_item(u'episode_rating', episode, 'rating')
         map_item(u'episode_name', episode, 'episodename')
+        map_item(u'plot', episode, 'overview')
 
         map_item(u'actor', episode, 'gueststars', trim_split)
         map_item(u'director', episode, 'director', trim_split)
         map_item(u'writer', episode, 'writer', trim_split)
+
 
         obj.update_key(u'series_tvdbid', unicode(series['id']))
         map_item(u'actor', series, 'actors', trim_split)

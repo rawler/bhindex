@@ -79,6 +79,7 @@ ListView {
             height: 128
             anchors { right: parent.right; top: parent.top }
             fillMode: Image.PreserveAspectFit
+            smooth: true
         }
         Loader {
             id: briefView
