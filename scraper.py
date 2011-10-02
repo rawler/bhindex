@@ -21,6 +21,13 @@ def imdb_scraper(obj, id):
         print "WARNING: failed to scrape from imdb due to missing library imdbpy."
         return
     movie = ia.get_movie(id)
+
+    def plot_map(plots):
+        if plots:
+            return plots[0].rsplit("::", 1)[0]
+        else:
+            return None
+
     if movie:
         t = time()
         def map_item(localName, name, filter=unicode):
@@ -35,6 +42,7 @@ def imdb_scraper(obj, id):
         map_item(u'image', 'cover url')
         map_item(u'year', 'year')
         map_item(u'genre', 'genres', set)
+        map_item(u'plot', 'plot', plot_map)
         directors = movie.get('directors')
         if directors:
             obj.update_key(u'director', (p['name'] for p in directors), t)
