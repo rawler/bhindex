@@ -29,21 +29,24 @@ def imdb_scraper(obj, id):
 
     if movie:
         t = time()
-        def map_item(localName, name, filter=unicode):
-            val = movie.get(name)
-            if val:
-                obj.update_key(localName, filter(movie[name]), t)
-            else:
-                print u"No match for %s" % name
+        def map_item(localName, names, filter=unicode):
+            if not isinstance(names, tuple):
+                names = (names,)
+            for name in names:
+                val = movie.get(name)
+                if val:
+                    obj.update_key(localName, filter(movie[name]), t)
+                    return True
+            print u"No match for %s" % name
         obj.update_key(u'imdb', unicode(id), t)
         map_item(u'rating', 'rating')
         map_item(u'title', 'title')
         map_item(u'image', 'cover url')
         map_item(u'year', 'year')
         map_item(u'genre', 'genres', set)
-        map_item(u'plot', 'plot', plot_map)
+        map_item(u'plot', ('plot', 'plot outline'), plot_map)
         map_item(u'country', 'countries', set)
-        directors = movie.get('directors')
+        directors = movie.get('director') or movie.get('directors')
         if directors:
             obj.update_key(u'director', (p['name'] for p in directors), t)
         cast = movie.get('cast')
