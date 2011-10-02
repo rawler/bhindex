@@ -43,6 +43,7 @@ def imdb_scraper(obj, id):
         map_item(u'year', 'year')
         map_item(u'genre', 'genres', set)
         map_item(u'plot', 'plot', plot_map)
+        map_item(u'country', 'countries', set)
         directors = movie.get('directors')
         if directors:
             obj.update_key(u'director', (p['name'] for p in directors), t)

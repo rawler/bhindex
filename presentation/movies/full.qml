@@ -2,9 +2,13 @@ import QtQuick 1.0
 
 import ".."
 
-Item {
-    height: plot.height + directors.height + actors.height
-
+Column {
+    PropertyDisplay {
+        anchors { left: parent.left; right: parent.right }
+        id: country
+        name: "Country"
+        text: (tags.country || "")
+    }
     PropertyDisplay {
         anchors { left: parent.left; right: parent.right }
         id: plot
@@ -12,14 +16,14 @@ Item {
         text: (tags.plot || "")
     }
     PropertyDisplay {
-        anchors { top: plot.bottom; left: parent.left; right: parent.right }
+        anchors { left: parent.left; right: parent.right }
         id: directors
         name: "Directors"
         text: (tags.director || "")
     }
     PropertyDisplay {
+        anchors { left: parent.left; right: parent.right }
         id: actors
-        anchors { top: directors.bottom; left: parent.left; right: parent.right }
         name: "Actors"
         text: (tags.actor || "")
     }
