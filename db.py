@@ -232,6 +232,9 @@ class DB(object):
         else:
             return None
 
+    def get_mtime(self, objid):
+        return self._query_single("SELECT MAX(timestamp) FROM map NATURAL JOIN obj WHERE obj = ?", (objid,))
+
     def query_ids(self, criteria):
         query, params = _sql_for_criteria(criteria)
         query = "SELECT obj FROM obj NATURAL JOIN (%s)" % query

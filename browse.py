@@ -18,6 +18,7 @@ config = config.read()
 
 from ui.filter import FilterList
 from ui.results import ResultsView
+from ui.toolbar import MainToolbar
 
 import bithorde
 
@@ -47,12 +48,26 @@ if __name__=='__main__':
         f = filter.criteria()
         results.refresh(f)
 
+    def onSortKeyChanged(key):
+        sort = maintoolbar.sort
+        if key == sort.SORT_TIME:
+            results.setSortKey(results.SORT_TIME)
+        elif key == sort.SORT_TITLE:
+            results.setSortKey(results.SORT_TITLE)
+        else:
+            assert False, "Unknown sort key"
+
+    maintoolbar = MainToolbar(mainwindow)
+    maintoolbar.sort.sortKeyChanged.connect(onSortKeyChanged)
+    mainwindow.addToolBar(maintoolbar)
+
     filter = FilterList(mainwindow, thisdb)
     filter.onChanged.connect(onFilterChanged)
     mainwindow.addToolBar(filter)
 
     results = ResultsView(mainwindow, thisdb)
 
+    onSortKeyChanged(maintoolbar.sort.sortKey)
     results.refresh(None)
     results.show()
 

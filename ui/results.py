@@ -112,7 +112,7 @@ class ResultList(QtCore.QAbstractListModel):
         return obj.title
 
 class ResultsView(QtDeclarative.QDeclarativeView):
-    KEY_BLACKLIST = ('xt', 'path', 'filetype')
+    SORT_TIME, SORT_TITLE = range(2)
     def __init__(self, parent, db):
         QtDeclarative.QDeclarativeView.__init__(self, parent)
         self.db = db
@@ -129,17 +129,30 @@ class ResultsView(QtDeclarative.QDeclarativeView):
         self.rootObject().editAsset.connect(self.editAsset)
         self.dragStart = None
 
+    def _fetch_title(self, x):
+        title = self.db.get_attr(x, 'title')
+        title = title and title.any()
+        return title or self.db.get_attr(x, 'name').any()
+
+    def setSortKey(self, key):
+        if key == self.SORT_TIME:
+            self._sort_key = dict(key=self.db.get_mtime, reverse=True)
+        elif key == self.SORT_TITLE:
+            self._sort_key = dict(key=self._fetch_title, reverse=False)
+        else:
+            assert False, "Unknown sort-key"
+
+        if hasattr(self, '_criteria'):
+            self.refresh(self._criteria)
+
     def refresh(self, criteria):
         if criteria:
             assets = self.db.query_ids(criteria)
         else:
             assets = self.db.all_ids()
+        self._criteria = criteria
 
-        def sort_key(x):
-            title = self.db.get_attr(x, 'title')
-            title = title and title.any()
-            return title or self.db.get_attr(x, 'name').any()
-        assets = sorted(assets, key=sort_key)
+        assets = sorted(assets, **self._sort_key)
 
         bithorde_querier.clear()
         self.model = model = ResultList(self, assets, self.db)
