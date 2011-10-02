@@ -1,4 +1,5 @@
 from PySide import QtCore, QtGui
+from PySide.QtCore import Qt
 from time import time
 
 import db, scraper
@@ -13,6 +14,7 @@ class PropertyEditor(QtGui.QWidget):
         layout.addWidget(self.keyBox)
         self.valueBox = QtGui.QLineEdit(v, self)
         layout.addWidget(self.valueBox)
+        self.setFocusProxy(self.valueBox)
 
     def value(self):
         return self.valueBox.text()
@@ -40,14 +42,15 @@ class ItemEditor(QtGui.QDialog):
         buttons = QtGui.QDialogButtonBox(QtGui.QDialogButtonBox.Ok | QtGui.QDialogButtonBox.Cancel, parent=self)
         layout.addWidget(buttons)
 
-        self.addItemButton = buttons.addButton(self.tr("Add"), buttons.ActionRole)
+        buttons.button(buttons.Ok).setDefault(True)
+        self.addItemButton = buttons.addButton(self.tr("&Add"), buttons.ActionRole)
         self.addItemButton.clicked.connect(self.addKey)
         self.addItemButton.setToolTip(self.tr("Add a property. Leaving a property blank will remove it."))
-        self.scrapeButton = buttons.addButton(self.tr("Auto-Fill"), buttons.ActionRole)
+        self.scrapeButton = buttons.addButton(self.tr("Auto-&Fill"), buttons.ActionRole)
         self.scrapeButton.clicked.connect(self.scrape)
         self.scrapeButton.setToolTip(self.tr("Try to auto-fetch properties from remote data-sources."))
-        buttons.button(QtGui.QDialogButtonBox.Ok).clicked.connect(self.onOK)
-        buttons.button(QtGui.QDialogButtonBox.Cancel).clicked.connect(self.close)
+        buttons.accepted.connect(self.onOK)
+        buttons.rejected.connect(self.close)
 
         self._reload()
         self.show()
@@ -66,13 +69,20 @@ class ItemEditor(QtGui.QDialog):
         item = PropertyEditor(self.itemPane, k, v)
         self.itemLayout.addWidget(item)
         self.items.append(item)
+        return item
 
     def addKey(self):
         key, ok = QtGui.QInputDialog.getText(self, self.tr("New Key Name"),
                                      self.tr("New Key Name"), QtGui.QLineEdit.Normal,
-                                     "")
+                                     "", Qt.Popup)
         if key and ok:
-            self._addItem(key, "")
+            item = self._addItem(key, "")
+            app = QtGui.QApplication
+            while app.hasPendingEvents():
+                app.processEvents()
+            QtGui.QApplication.processEvents()
+            self.scrollArea.ensureWidgetVisible(item, 50, 50)
+            item.setFocus()
 
     def onOK(self):
         self.save()
