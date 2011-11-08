@@ -69,13 +69,14 @@ class BitHordeIteratorClient(Client):
         reactor.stop()
 
 class QueryThread(Client, Thread):
-    def __init__(self):
+    def __init__(self, config=CONFIG):
+        self.config = config
         Thread.__init__(self)
         self.daemon = True
         self.start()
 
     def run(self):
-        bithorde.connectUNIX("/tmp/bithorde", self)
+        bithorde.connectUNIX(self.config.get('BITHORDE', 'unixsocket'), self)
         bithorde.reactor.run(installSignalHandlers=0)
 
     def onConnected(self):
