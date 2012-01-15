@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
     def add(file, tags):
         '''Try to upload one file to bithorde and add to index'''
-        file = path.normpath(file)
+        file = unicode(path.normpath(file), sys.stdin.encoding or 'UTF-8')
         name = options.sanitizer(file)
         mtime = path.getmtime(file)
         tags = tags or {}
