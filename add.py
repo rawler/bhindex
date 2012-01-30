@@ -26,9 +26,13 @@ def sanitizedpath(file):
     then santizies by removing leading path-fixtures such as [~./]'''
     return file.lstrip('./~') # Remove .. and similar placeholders
 
-def bh_upload(file):
+def bh_upload(file, link):
     '''Assumes file is normalized through path.normpath'''
-    bhup = subprocess.Popen([bh_upload_bin, file], stdout=subprocess.PIPE)
+    cmd = [bh_upload_bin]
+    if link:
+        cmd.append('--link')
+    cmd.append(file)
+    bhup = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     bhup_out, _ = bhup.communicate()
 
     for line in bhup_out.splitlines():
@@ -45,6 +49,9 @@ if __name__ == '__main__':
     usage = "usage: %prog [options] file1 [file2 ...]\n" \
             "  An argument of '-' will expand to filenames read line for line on standard input."
     parser = cliopt.OptionParser(usage=usage)
+    parser.add_option("-l", "--upload_link", action="store_true", dest="upload_link",
+                      default=config.getboolean('BITHORDE', 'upload_link'),
+                      help="Upload as a linked asset, instead of adding it to cache-dir. NEEDS appropriate bithorded-config.")
     parser.add_option("-L", "--no-links", action="store_false",
                       dest="export_links", default=True,
                       help="When done, don't immediately export links to links-directory")
@@ -85,7 +92,7 @@ if __name__ == '__main__':
             if found_up2date:
                 return
 
-        asset = bh_upload(file)
+        asset = bh_upload(file, options.upload_link)
         if asset:
             asset.name = name
             t = time()

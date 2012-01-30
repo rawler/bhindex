@@ -14,6 +14,7 @@ CONFIG_DEFAULTS = {
         "fusedir": "/tmp/bhfuse",
         "unixsocket": "/tmp/bithorde",
         "pressure": "10",
+        "upload_link": "false",
     },
 }
 
