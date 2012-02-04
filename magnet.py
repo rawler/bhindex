@@ -6,7 +6,11 @@ import db
 
 XT_PREFIX_TIGER = 'tree:tiger:'
 
+
 class REGEX(object):
+    '''Matches provided attribute against a regex.
+       Returns: the contained named groups, if a match is found
+    '''
     def __init__(self, pattern, flags=0):
         self._re = re.compile(pattern, flags)
 
@@ -18,26 +22,39 @@ class REGEX(object):
             return None
 
 class SETIF(object):
-    def __init__(self, key, value, rule):
-        self._key = key
-        self._value = value
+    '''Matches provided attribute against an embedded rule, adding to the result
+       Returns: {key: value}, if embedded rule matched
+    '''
+    def __init__(self, rule, attrs):
         self._rule = rule
+        self._attrs = attrs
 
     def match(self, string):
         m = self._rule.match(string)
         if not m is None:
-            m[self._key] = self._value
+            m.update(self._attrs)
         return m
 
 class IS(unicode):
+    '''Exact match against provided attribute.
+       Returns: empty map if successful, otherwise none.
+    '''
     def match(self, string):
         if self == string:
             return {}
         else:
             return None
 
+# Rules are evaluated in order. Each rule are on the form (rule-set, filter)
+# Filters are used to change any resulting attribute-values for this rule-set, such as downcasing.
+#
+# Each rule-set are a list on the form (attr: matcher, ...)
+# Attr is the attr on the object to evaluate, and matcher performs the evaluation, returning a
+# result-map which is then merged into the object.
+#
+# Whenever a rule fails to match the selected attribute, the current rule-set is aborted, and the next one evaluated.
 RULES = [
-    ({"ext": SETIF(u"type", u"video", REGEX(r'(mkv|avi|mpg|ts|mp4|wmv|mov)'))}, None),
+    ({"ext": SETIF(REGEX(r'(mkv|avi|mpg|ts|mp4|wmv|mov)'), {u"type": u"video"})}, None),
     ({"type": IS(u"video"), u"path": REGEX(r'(?P<category>Movies|TV)/(?!XXX)')}, None),
     ({"type": IS(u"video"), u"path": REGEX(r'Movies/(?P<category>XXX)')}, None),
     ({"path": REGEX(r'Movies/(?P<title>.*) \((?P<year>\d{4})\)/')}, None),
