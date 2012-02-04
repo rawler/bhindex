@@ -10,7 +10,7 @@ import bithorde
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config, magnet
+import db, config, magnet, util
 config = config.read()
 
 TXTPATH = config.get('TXTSYNC', 'exportpath')
@@ -35,25 +35,19 @@ class Encoder(json.JSONEncoder):
         else:
             return self.default(o)
 
-class ctr(object):
-    def __init__(self):
-        self.i = 0
-
-    def __call__(self):
-        res = self.i
-        self.i += 1
-        return res
-
 def main():
     DB = db.open(config)
     tmppath = TXTPATH+".tmp"
     outfile = open(tmppath, 'w')
-    count=ctr()
+    count = util.Counter()
+    storage = util.Counter()
 
     def onStatusUpdate(asset, status, db_asset):
         if status.status == bithorde.message.SUCCESS:
-            if count():
+            if int(count):
                 outfile.write(',\n')
+            count.inc()
+            storage.inc(status.size)
             json.dump(db_asset, outfile, cls=Encoder, indent=2)
 
     outfile.write('[')
@@ -68,6 +62,8 @@ def main():
     if os.path.exists(TXTPATH):
         shutil.copymode(TXTPATH, tmppath)
     os.rename(tmppath, TXTPATH)
+
+    print "Exported %d assets, with %.2fGB worth of data." % (count, storage.inGibi())
 
 if __name__=='__main__':
     main()

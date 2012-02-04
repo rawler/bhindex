@@ -10,7 +10,7 @@ import bithorde
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config, magnet, scraper
+import db, config, magnet, scraper, util
 config = config.read()
 
 LINKDIR = config.get('LINKSEXPORT', 'linksdir')
@@ -54,6 +54,8 @@ class ImportSession(object):
         self.do_scrape = do_scrape
         self.imports = imports
         self.db = db
+        self.count = util.Counter()
+        self.storage = util.Counter()
 
     def assets(self):
         FORMATS = {
@@ -70,6 +72,8 @@ class ImportSession(object):
     def onStatusUpdate(self, asset, status, db_asset):
         print u"%s: %s" % (STATUS.values_by_number[status.status].name, u','.join(db_asset['name']))
         if status.status == bithorde.message.SUCCESS:
+            self.count.inc()
+            self.storage.inc(status.size)
             if self.do_scrape:
                 scraper.scrape_for(db_asset)
             self.db.update(db_asset)
@@ -81,6 +85,7 @@ class ImportSession(object):
 
         self.db.vacuum()
         self.db.commit()
+        return self
 
 if __name__ == '__main__':
     import cliopt
@@ -99,4 +104,5 @@ where <format> is either 'json' or 'magnetlist'"""
     else:
         assets = ((config.get('txt_'+imp, 'format'), config.get('txt_'+imp, 'url'))
                   for imp in config.get('TXTSYNC', 'imports').split(','))
-    ImportSession(DB, assets, options.scrape).run()
+    sess = ImportSession(DB, assets, options.scrape).run()
+    print "Imported %d assets, with %.2fGB worth of data." % (sess.count, sess.storage.inGibi())
