@@ -91,7 +91,16 @@ if __name__ == '__main__':
         mtime = path.getmtime(file)
         ext = os.path.splitext(file)[1]
         tags = tags or {}
-        exts = exts or {}
+        exts = exts or set()
+
+        if type(exts).__name__ == 'list':
+           exts = set(exts)
+
+        try:
+            for e in config.get('ADD', 'extensions').split(','):
+                exts.add(e.strip())
+        except NoOptionError:
+               pass
 
         if ext.strip('.') not in exts and options.recursive == True:
            print "* Skipping %s because of extension %s (Add extensions to be included with -e)." % (name, ext)
@@ -146,13 +155,9 @@ if __name__ == '__main__':
                       print "* Processed %s files." % len(fileList)
 
                    else:
-                       print "This is a directory. Perhaps you'd like to add all files from it by specifying -r or --recursive-add?"
+                       print "%s is a directory. Perhaps you'd like to add all files from it by specifying -r or --recursive-add?" % arg
 
                 elif os.path.isfile(arg):
-                     if options.recursive == True:
-                        parser.error("Can't recursively add a file.")
-
-                     else:
                          add(arg, options.tags, options.exts)
 
                 else:
