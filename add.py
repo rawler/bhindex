@@ -46,7 +46,7 @@ def bh_upload(file, link):
 
 if __name__ == '__main__':
     import cliopt
-    usage = "usage: %prog [options] file1 [file2 ...]\n" \
+    usage = "usage: %prog [options] file1/dir1 [file2/dir2 ...]\n" \
             "  An argument of '-' will expand to filenames read line for line on standard input."
     parser = cliopt.OptionParser(usage=usage)
     parser.add_option("-l", "--upload_link", action="store_true", dest="upload_link",
@@ -66,22 +66,45 @@ if __name__ == '__main__':
     parser.add_option("-f", "--force",
                       action="store_true", dest="force", default=False,
                       help="Force upload even of assets already found in sync in index")
+    parser.add_option("-r", "--recursive-add",
+                      action="store_true", dest="recursive", default=False,
+                      help="Recursively add files from a folder")
+    parser.add_option("-e", "--ext",
+                      action="append", dest="exts",
+                      help="Define file extensions to be added. Only valid with -r / --recursive-add")
 
     (options, args) = parser.parse_args()
     if len(args) < 1:
-        parser.error("At least one file must be specified")
+        parser.error("At least one file or directory must be specified.")
+
+    do_export = False
 
     # Parse into DB-tag-objects
     tags = cliopt.parse_attrs(options.tags)
 
     DB = db.open(config)
 
-    def add(file, tags):
+    def add(file, tags, exts):
         '''Try to upload one file to bithorde and add to index'''
         file = unicode(path.normpath(file), sys.stdin.encoding or 'UTF-8')
         name = options.sanitizer(file)
         mtime = path.getmtime(file)
+        ext = os.path.splitext(file)[1]
         tags = tags or {}
+        exts = exts or set()
+
+        if type(exts).__name__ == 'list':
+           exts = set(exts)
+
+        try:
+            for e in config.get('ADD', 'extensions').split(','):
+                exts.add(e.strip())
+        except NoOptionError:
+               pass
+
+        if ext.strip('.') not in exts and options.recursive == True:
+           print "* Skipping %s because of extension %s (Add extensions to be included with -e)." % (name, ext)
+           return
 
         if not options.force:
             oldassets = DB.query({'path': name})
@@ -90,6 +113,7 @@ if __name__ == '__main__':
                 if a['name'].t >= mtime:
                     found_up2date = True
             if found_up2date:
+                print "* File \"%s\" already in database, won't add." % file
                 return
 
         asset = bh_upload(file, options.upload_link)
@@ -102,7 +126,11 @@ if __name__ == '__main__':
             scraper.scrape_for(asset)
             for k,v in sorted(asset.iteritems()):
                 print (u"%s: %s" % (k, v.join())).encode('utf-8')
+
             DB.update(asset)
+            global do_export
+            do_export = True
+
         else:
             print "Error adding %s" % file
 
@@ -112,11 +140,33 @@ if __name__ == '__main__':
                 for line in sys.stdin:
                     add(line.strip(), options.tags)
             else:
-                add(arg, options.tags)
-    finally:
-        DB.commit()
+                if os.path.isdir(arg):
+                   if options.recursive == True:
+                      fileList = []
+                      for root, subFolders, files in os.walk(arg):
+                          subFolders[:] = [d for d in subFolders if not d.startswith('.')] # Remove dotted dirs.
+                          for file in files:
+                              fileList.append(os.path.join(root, file))
 
-    if options.export_links:
-        export_links.main()
-    if options.export_txt:
-        export_txt.main()
+                      for file in fileList:
+                          print "* Considering %s" % file
+                          add(file, options.tags, options.exts)
+
+                      print "* Processed %s files." % len(fileList)
+
+                   else:
+                       print "%s is a directory. Perhaps you'd like to add all files from it by specifying -r or --recursive-add?" % arg
+
+                elif os.path.isfile(arg):
+                         add(arg, options.tags, options.exts)
+
+                else:
+                    parser.error("At least one file or directory must be specified.")
+    finally:
+           DB.commit()
+
+    if options.export_links and do_export == True:
+       export_links.main()
+    if options.export_txt and do_export == True:
+       export_txt.main()
+
