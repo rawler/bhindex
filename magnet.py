@@ -59,7 +59,7 @@ RULES = [
     ({"type": IS(u"video"), u"path": REGEX(r'Movies/(?P<category>XXX)')}, None),
     ({"path": REGEX(r'Movies/(?P<title>.*) \((?P<year>\d{4})\)/')}, None),
     ({"path": REGEX(r'Movies/(?!XXX)(?P<title>[^/]+)[. ](720p|1080p|bdrip|dvdrid|dvdr|PAL|xvid|\.)*', re.I)}, None),
-    ({"path": REGEX(r'TV/(?P<series>[^/]+)/Season (?P<season>\d+)/[^\d]*(\d{1,2})x(?P<episode>\d{2})')}, None),
+    ({"path": REGEX(r'TV/(?P<series>[^/]+)/Season (?P<season>\d+)/.*(\d{1,2})x(?P<episode>\d{2})')}, None),
     ({"path": REGEX(r'.*(?P<quality>720p|1080p|480p|PAL|NTSC)', re.I)}, unicode.lower),
 ]
 
