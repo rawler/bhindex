@@ -3,6 +3,7 @@
 import sys, os.path
 
 from time import time
+from magnet import applyRules
 
 try:
     from imdb import IMDb
@@ -147,6 +148,7 @@ def tvdb_search(obj):
     return iter_series()
 
 def scrape_for(obj):
+    applyRules(obj, time())
     if obj.get('imdb'):
         return imdb_scraper(obj, obj['imdb'].any())
     elif obj.get('title') and obj.get('year'):
@@ -183,3 +185,5 @@ if __name__ == '__main__':
             if scrape_for(obj):
                 db.update(obj)
                 db.commit()
+        else:
+            print "Warning: %s not found" % arg
