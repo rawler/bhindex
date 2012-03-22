@@ -54,7 +54,7 @@ class FilterList(QtGui.QToolBar):
     def __init__(self, parent, db):
         QtGui.QToolBar.__init__(self, "Filter", parent)
         self.db = db
-        self.keys = [k for k,c in db.list_keys()]
+        self.keys = [k for k,c in db.list_keys() if c>0]
         self.addFilter()
 
     def addFilter(self):

@@ -73,6 +73,7 @@ class Object(object):
         assert isinstance(key, unicode)
         assert isinstance(value, ValueSet)
 
+        key = key.lower()
         if key not in self._dict or (value.t >= self._dict[key].t and self._dict[key] != value):
             self._dirty.add(key)
             self._dict[key] = value
@@ -101,6 +102,13 @@ class Object(object):
             t=time()
         if isinstance(values, unicode):
             values = set([values])
+
+        # Try to prune upcased properties
+        lkey = key.lower()
+        if lkey != key:
+            del self[key]
+            key = lkey
+
         if key in self:
             self[key].update(values, t)
             self._dirty.add(key)
