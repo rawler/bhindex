@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os, os.path as path, sys, json, urllib2
+import codecs, os, os.path as path, sys, json, urllib2
 from ConfigParser import ConfigParser
 from time import time
 
@@ -62,9 +62,10 @@ class ImportSession(object):
             'magnetlist': readMagnetAssets,
             'json': readJSON,
         }
+        unireader = codecs.getreader('utf-8')
         for format,url in self.imports:
             formatParser = FORMATS[format]
-            input = urllib2.urlopen(url)
+            input = unireader(urllib2.urlopen(url))
             for asset, hash in formatParser(input):
                 yield asset, hash
             input.close()
