@@ -65,10 +65,13 @@ class ImportSession(object):
         unireader = codecs.getreader('utf-8')
         for format,url in self.imports:
             formatParser = FORMATS[format]
-            input = unireader(urllib2.urlopen(url))
-            for asset, hash in formatParser(input):
-                yield asset, hash
-            input.close()
+            try:
+                input = unireader(urllib2.urlopen(url))
+                for asset, hash in formatParser(input):
+                    yield asset, hash
+                input.close()
+            except urllib2.URLError:
+                print "Failure on '%s'" % url
 
     def onStatusUpdate(self, asset, status, db_asset):
         print u"%s: %s" % (STATUS.values_by_number[status.status].name, u','.join(db_asset['name']))
