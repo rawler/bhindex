@@ -84,7 +84,7 @@ if __name__ == '__main__':
 
     DB = db.open(config)
 
-    def add(file, tags, exts):
+    def add(file, tags, exts=None):
         '''Try to upload one file to bithorde and add to index'''
         file = unicode(path.normpath(file), sys.stdin.encoding or 'UTF-8')
         name = options.sanitizer(file)
