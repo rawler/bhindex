@@ -28,7 +28,7 @@ def sanitizedpath(file):
 
 def bh_upload(file, link):
     '''Assumes file is normalized through path.normpath'''
-    cmd = [bh_upload_bin]
+    cmd = [bh_upload_bin, "-u/tmp/bithorde.source", "--link"]
     if link:
         cmd.append('--link')
     cmd.append(file)
@@ -63,6 +63,9 @@ if __name__ == '__main__':
     parser.add_option("-s", "--strip-path", action="store_const", dest="sanitizer",
                       default=sanitizedpath, const=path.basename,
                       help="Strip name to just the name of the file, without path")
+    parser.add_option("-S", "--scrapers", dest="scrapers",
+                      default=','.join(scraper.SCRAPERS),
+                      help="Scrapers enabled for pulling extra metadata")
     parser.add_option("-f", "--force",
                       action="store_true", dest="force", default=False,
                       help="Force upload even of assets already found in sync in index")
@@ -83,6 +86,7 @@ if __name__ == '__main__':
     tags = cliopt.parse_attrs(options.tags)
 
     DB = db.open(config)
+    SCRAPERS = set(options.scrapers.split(','))
 
     def add(file, tags, exts=None):
         '''Try to upload one file to bithorde and add to index'''
@@ -123,7 +127,7 @@ if __name__ == '__main__':
             for k,v in tags.iteritems():
                 v.t = t
                 asset[k] = v
-            scraper.scrape_for(asset)
+            scraper.scrape_for(asset, SCRAPERS)
             for k,v in sorted(asset.iteritems()):
                 print (u"%s: %s" % (k, v.join())).encode('utf-8')
 

@@ -5,9 +5,12 @@ import sys, os.path
 from time import time
 from magnet import applyRules
 
+SCRAPERS = set(['tvdb'])
+
 try:
     from imdb import IMDb
     ia = IMDb()
+    SCRAPERS.add('imdb')
 except ImportError:
     print "WARNING: failed to load imdb-scraper due to missing library imdbpy."
     ia = None
@@ -15,6 +18,7 @@ except ImportError:
 HERE = os.path.dirname(__file__)
 sys.path.append(os.path.join(HERE, "tvdb_api"))
 import tvdb_api
+
 
 def imdb_scraper(obj, id):
     if not ia:
@@ -147,13 +151,13 @@ def tvdb_search(obj):
 
     return iter_series()
 
-def scrape_for(obj):
+def scrape_for(obj, sources=SCRAPERS):
     applyRules(obj, time())
-    if obj.get('imdb'):
+    if obj.get('imdb') and 'imdb' in sources:
         return imdb_scraper(obj, obj['imdb'].any())
-    elif obj.get('title') and obj.get('year'):
+    elif obj.get('title') and obj.get('year') and 'imdb' in sources:
         return imdb_search(obj)
-    elif obj.get('series') and obj.get('season') and obj.get('episode'):
+    elif obj.get('series') and obj.get('season') and obj.get('episode') and 'tvdb' in sources:
         return tvdb_search(obj)
 
 if __name__ == '__main__':
