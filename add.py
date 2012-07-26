@@ -28,7 +28,7 @@ def sanitizedpath(file):
 
 def bh_upload(file, link):
     '''Assumes file is normalized through path.normpath'''
-    cmd = [bh_upload_bin, "-u/tmp/bithorde.source", "--link"]
+    cmd = [bh_upload_bin]
     if link:
         cmd.append('--link')
     cmd.append(file)
