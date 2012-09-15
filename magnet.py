@@ -84,12 +84,12 @@ def applyRules(asset, t):
                 asset[k] = db.ValueSet(v, t)
 
 def objectFromMagnet(magnetLink, t=None, fullPath=None):
-    x = parse(magnetLink)
+    x = parse(magnetLink, fullPath)
     if x:
         if not t:
             t = time()
         asset = db.Object(x['xt'])
-        asset[u'path'] = db.ValueSet(fullPath or x['path'], t)
+        asset[u'path'] = db.ValueSet(fullPath or x.get('path', ''), t)
         asset[u'name'] = db.ValueSet(x['name'], t)
         asset[u'xt'] = db.ValueSet(x['xt'], t)
         asset[u'ext'] = db.ValueSet(x['ext'], t)
@@ -99,14 +99,20 @@ def objectFromMagnet(magnetLink, t=None, fullPath=None):
 
     return None
 
-def parse(magnetLink):
+def parse(magnetLink, fullPath=None):
     _,q = magnetLink.split('?',1)
     attrs = parse_qs(q)
+
+    paths = fullPath and [fullPath] or attrs.get('dn') or []
+    fnames = [os.path.basename(x) for x in paths]
+    attrs['path'] = paths
+    names = []; exts = []
+    for fname in fnames:
+        name, ext = os.path.splitext(fname)
+        names.append(name); exts.append(ext)
+    attrs['name'] = names
+    attrs['ext'] = exts
     if 'dn' in attrs:
-        fname = os.path.basename(attrs['dn'][0])
-        attrs['path'] = attrs['dn']
-        attrs['name'], ext = os.path.splitext(fname)
-        attrs['ext'] = ext.lstrip('.')
         del attrs['dn']
     if 'xt' in attrs:
         for xt in attrs['xt']:
