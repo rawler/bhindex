@@ -15,6 +15,10 @@ CONFIG_DEFAULTS = {
         "unixsocket": "/tmp/bithorde",
         "pressure": "10",
         "upload_link": "false",
+        "asset_timeout": "1000",
+    },
+    "TXTSYNC": {
+        "asset_import_timeout": "2500",
     },
 }
 

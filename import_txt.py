@@ -83,7 +83,7 @@ class ImportSession(object):
             self.db.update(db_asset)
 
     def run(self):
-        client = bithorde.BitHordeIteratorClient(self.assets(), self.onStatusUpdate)
+        client = bithorde.BitHordeIteratorClient(self.assets(), self.onStatusUpdate, timeout=config.getint('TXTSYNC', 'asset_import_timeout'))
         bithorde.connectUNIX(UNIXSOCKET, client)
         bithorde.reactor.run()
 

@@ -9,6 +9,7 @@ import config
 
 CONFIG = config.read()
 PRESSURE = int(CONFIG.get('BITHORDE', 'pressure'))
+DEFAULT_TIMEOUT = CONFIG.getint('BITHORDE', 'asset_timeout')
 
 class Client(bithorde.Client):
     def onDisconnected(self, reason):
@@ -22,11 +23,12 @@ class Client(bithorde.Client):
         reactor.stop()
 
 class Querier(object):
-    def __init__(self, client, callback):
+    def __init__(self, client, callback, timeout=DEFAULT_TIMEOUT):
         self._client = client
         self._callback = callback
         self._queue = list()
         self._requestCount = 0
+        self._timeout = timeout
 
     def submit(self, hashIds, key):
         if self._requestCount < PRESSURE:
@@ -42,7 +44,7 @@ class Querier(object):
         asset.key = key
         asset.onStatusUpdate = MethodType(self._gotResponse, asset, bithorde.Asset)
         self._client.allocateHandle(asset)
-        asset.bind(hashIds)
+        asset.bind(hashIds, self._timeout)
 
         self._requestCount += 1
 
@@ -57,12 +59,13 @@ class Querier(object):
             self._request(hashIds, key) # Request more, if needed
 
 class BitHordeIteratorClient(Client):
-    def __init__(self, assets, onStatusUpdate):
+    def __init__(self, assets, onStatusUpdate, timeout=DEFAULT_TIMEOUT):
         self.assets = assets
         self.onStatusUpdate = onStatusUpdate
+        self._timeout = timeout
 
     def onConnected(self):
-        self.ai = bithorde.AssetIterator(self, self.assets, self.onStatusUpdate, self.whenDone, parallel=PRESSURE)
+        self.ai = bithorde.AssetIterator(self, self.assets, self.onStatusUpdate, self.whenDone, parallel=PRESSURE, timeout=self._timeout)
 
     def whenDone(self):
         self.close()
