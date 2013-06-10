@@ -14,7 +14,7 @@ import db, config, magnet, scraper, util
 config = config.read()
 
 LINKDIR = config.get('LINKSEXPORT', 'linksdir')
-UNIXSOCKET = config.get('BITHORDE', 'unixsocket')
+ADDRESS = config.get('BITHORDE', 'address')
 
 def readMagnetAssets(input):
     t = None
@@ -84,7 +84,7 @@ class ImportSession(object):
 
     def run(self):
         client = bithorde.BitHordeIteratorClient(self.assets(), self.onStatusUpdate, timeout=config.getint('TXTSYNC', 'asset_import_timeout'))
-        bithorde.connectUNIX(UNIXSOCKET, client)
+        bithorde.connect(ADDRESS, client)
         bithorde.reactor.run()
 
         self.db.vacuum()

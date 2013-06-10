@@ -2,7 +2,7 @@ from types import MethodType
 from threading import Thread
 
 import pyhorde.bithorde as bithorde
-from pyhorde.bithorde import connectUNIX, reactor, message, b32decode
+from pyhorde.bithorde import connect, reactor, message, b32decode
 import pyhorde.bithorde_pb2 as message
 
 import config
@@ -79,7 +79,7 @@ class QueryThread(Client, Thread):
         self.start()
 
     def run(self):
-        bithorde.connectUNIX(self.config.get('BITHORDE', 'unixsocket'), self)
+        bithorde.connect(self.config.get('BITHORDE', 'address'), self)
         bithorde.reactor.run(installSignalHandlers=0)
 
     def onConnected(self):

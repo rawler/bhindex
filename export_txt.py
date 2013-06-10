@@ -14,7 +14,7 @@ import db, config, magnet, util
 config = config.read()
 
 TXTPATH = config.get('TXTSYNC', 'exportpath')
-UNIXSOCKET = config.get('BITHORDE', 'unixsocket')
+ADDRESS = config.get('BITHORDE', 'address')
 
 def list_db(db):
     for asset in db.query({'path': db.ANY, 'name': db.ANY, 'xt': db.ANY}):
@@ -53,7 +53,7 @@ def main():
     outfile.write('[')
 
     client = bithorde.BitHordeIteratorClient(list_db(DB), onStatusUpdate)
-    bithorde.connectUNIX(UNIXSOCKET, client)
+    bithorde.connect(ADDRESS, client)
     bithorde.reactor.run()
 
     outfile.write(']')
