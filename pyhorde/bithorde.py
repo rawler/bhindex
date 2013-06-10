@@ -28,6 +28,8 @@ MSG_REV_MAP = {
     message.Read.Response: 6,
     message.BindWrite:     7,
     message.DataSegment:   8,
+    message.HandShakeConfirmed: 9,
+    message.Ping: 10,
 }
 DEFAULT_TIMEOUT=4000
 
@@ -270,6 +272,20 @@ def b32decode(string):
     l = len(string)
     string = string + "="*(7-((l-1)%8)) # Pad with = for b32decodes:s pleasure
     return _b32decode(string, True)
+
+def connect(addr, client):
+    if addr.find('/') != -1:
+        connectUNIX(addr, client)
+    else:
+        colpos = addr.find(':')
+        if colpos == -1:
+            connectUNIX(sock, client)
+        else:
+            connectTCP(addr[:colpos], int(addr[colpos+1:]), client)
+
+def connectTCP(host, port, client):
+    factory = ClientWrapper(client)
+    reactor.connectTCP(host, port, factory)
 
 def connectUNIX(sock, client):
     factory = ClientWrapper(client)
