@@ -16,6 +16,33 @@ config = config.read()
 LINKDIR = path.normpath(config.get('LINKSEXPORT', 'linksdir'))
 BHFUSEDIR = config.get('BITHORDE', 'fusedir')
 
+def link(linkpath, tgt):
+    try:            oldtgt = os.readlink(linkpath)
+    except OSError: oldtgt = None
+
+    if oldtgt == tgt:
+        return True
+    elif oldtgt: 
+        try: os.unlink(linkpath)
+        except OSError as e:
+            print "Failed to remove old link %s:" % oldtgt
+            print "  ", e
+            return False
+
+    dstdir = path.dirname(linkpath)
+    if not path.exists(dstdir):
+        try: os.makedirs(dstdir)
+        except OSError as e:
+            print "Failed to create directory %s:" % dstdir
+            print "  ", e
+            return False
+    try: os.symlink(tgt, linkpath)
+    except OSError as e:
+        print "Failed to create link at %s:" % linkpath
+        print "  ", e
+        return False
+    return True
+
 def main(force_all=False):
     DB = db.open(config)
 
@@ -24,6 +51,7 @@ def main(force_all=False):
         if asset.get(u'@linked') and not force_all:
             continue
 
+        success = True
         for p in asset['path']:
             dst = path.normpath(path.join(LINKDIR, p)).encode('utf8')
             if not dst.startswith(LINKDIR):
@@ -31,22 +59,12 @@ def main(force_all=False):
                 continue
 
             tgt = path.join(BHFUSEDIR, magnet.fromDbObject(asset))
-            try:
-                oldtgt = os.readlink(dst)
-            except OSError:
-                oldtgt = None
+            if not link(dst, tgt):
+                success = False 
 
-            if oldtgt == tgt:
-                continue
-            elif oldtgt: 
-                os.unlink(dst)
-
-            dstdir = path.dirname(dst)
-            if not path.exists(dstdir):
-                os.makedirs(dstdir)
-            os.symlink(tgt, dst)
-        asset[u'@linked'] = db.ValueSet((u'true',), t=t)
-        DB.update(asset)
+	if success:
+            asset[u'@linked'] = db.ValueSet((u'true',), t=t)
+            DB.update(asset)
     DB.commit()
 
 if __name__=='__main__':
