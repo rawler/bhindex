@@ -43,7 +43,13 @@ def link(linkpath, tgt):
         return False
     return True
 
-def main(force_all=False):
+def path_in_prefixes(path, prefixes):
+    for prefix in prefixes:
+        if path.startswith(prefix):
+            return True
+    return False
+
+def main(force_all=False, prefixes=[]):
     DB = db.open(config)
 
     t = time()
@@ -53,6 +59,9 @@ def main(force_all=False):
 
         success = True
         for p in asset['path']:
+            if prefixes and not path_in_prefixes(p, prefixes):
+                success = False
+                continue
             dst = path.normpath(path.join(LINKDIR, p)).encode('utf8')
             if not dst.startswith(LINKDIR):
                 print "Warning! %s tries to break out of directory!" % dst
@@ -68,10 +77,10 @@ def main(force_all=False):
     DB.commit()
 
 if __name__=='__main__':
-    parser = OptionParser()
+    parser = OptionParser(usage="usage: %prog [options] [path...]")
     parser.add_option("-T", "--force-all", action="store_true",
                       dest="force_all", default=False,
                       help="Normally, only links not marked with @linked in db, added. This removes that check, adding ALL links.")
     (options, args) = parser.parse_args()
 
-    main(options.force_all)
+    main(options.force_all, args)
