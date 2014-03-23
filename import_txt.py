@@ -61,6 +61,7 @@ class ImportSession(object):
         self.db = db
         self.count = util.Counter()
         self.storage = util.Counter()
+        self.dirty = 0
 
     def assets(self):
         FORMATS = {
@@ -83,6 +84,10 @@ class ImportSession(object):
         if self.do_scrape:
             scraper.scrape_for(db_asset)
         self.db.update(db_asset)
+        self.dirty += 1
+        if self.dirty >= 500:
+            self.db.commit()
+            self.dirty = 0
 
     def onStatusUpdate(self, asset, status, db_asset):
         print u"%s: %s" % (STATUS.values_by_number[status.status].name, u','.join(db_asset['name']))

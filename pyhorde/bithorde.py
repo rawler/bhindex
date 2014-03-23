@@ -57,7 +57,7 @@ class AssetMap(list):
             self.extend((None,)*((k-l)+2))
         return list.__setitem__(self, k, v)
 
-def decodeMessage(buf):
+def decodeMessage(buf, msg_map=MSGMAP):
     '''Decodes a single message from buffer
     @return (msg, bytesConsumed)
     @raises IndexError if buffer did not contain complete message
@@ -68,7 +68,7 @@ def decodeMessage(buf):
     msgend = newpos+size
     if msgend > len(buf):
         raise IndexError, 'Incomplete message'
-    msg = MSGMAP[id].message_type._concrete_class()
+    msg = msg_map[id].message_type._concrete_class()
     msg.ParseFromString(buf[newpos:msgend])
     return msg, msgend
 

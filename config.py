@@ -2,6 +2,7 @@
 
 import os.path as path
 from ConfigParser import SafeConfigParser as ConfigParser
+from socket import gethostname
 
 HERE = path.dirname(__file__)
 DEFAULT_CONFIG = path.join(HERE, 'my.config')
@@ -21,8 +22,15 @@ class VersioningConfigParser(ConfigParser):
         return res
 
     def items(self, section, raw=None, vars=None):
-        raise NotImplementedError
-
+        res = ConfigParser.items(self, section, raw, vars)
+        for (new_section, new_key), (old_section, old_key) in self.deprecations.iteritems():
+            if section == new_section:
+                value = self.get(old_section, old_key)
+                if value:
+                    print "WARNING, Deprecation: %s.%s in config renamed to %s.%s" % (old_section, old_option, section, option)
+                    if new_key not in res:
+                        res[new_key] = value
+        return res
 
 CONFIG_DEFAULTS = {
     "DB": {
@@ -37,6 +45,12 @@ CONFIG_DEFAULTS = {
     },
     "TXTSYNC": {
         "asset_import_timeout": "2500",
+    },
+    "LIVESYNC": {
+        "name": gethostname(),
+        "db_poll_interval": "1.0",
+        "connect": "",
+        "port": "4000",
     },
 }
 

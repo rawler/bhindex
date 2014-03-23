@@ -20,13 +20,15 @@ class Starts(unicode):
     pass
 
 class ValueSet(set):
-    def __init__(self, v, t):
+    def __init__(self, v, t=None):
         if isinstance(v, unicode):
             set.__init__(self, [v])
         else:
             set.__init__(self, v)
             for x in self:
                 assert isinstance(x, unicode)
+        if not t:
+            t = time()
         self.t = t
 
     def update(self, v, t=None):
@@ -42,12 +44,6 @@ class ValueSet(set):
     def join(self, sep=u', '):
         return unicode(sep).join(self)
     __unicode__ = __str__ = join
-
-    def gen_id(self):
-        m = hashlib.sha1()
-        for x in sorted(self):
-            m.update(x.encode('utf8'))
-        return struct.unpack("!Q", m.digest()[:8])[0]
 
 class Object(object):
     def __init__(self, objid, init={}):
@@ -139,18 +135,17 @@ def create_DB(conn):
     CREATE INDEX IF NOT EXISTS key_key ON key (key);
 
     CREATE TABLE IF NOT EXISTS map (
+        serial INTEGER NOT NULL PRIMARY KEY,
         objid INTEGER NOT NULL,
         keyid INTEGER NOT NULL,
-        timestamp INT NOT NULL,
+        timestamp INTEGER NOT NULL,
         listid INTEGER,
-        PRIMARY KEY (objid, keyid),
+        UNIQUE (objid, keyid),
         FOREIGN KEY (objid) REFERENCES obj (objid),
         FOREIGN KEY (keyid) REFERENCES key (keyid),
         FOREIGN KEY (listid) REFERENCES list (listid)
     );
-    CREATE INDEX IF NOT EXISTS map_obj ON map (objid);
     CREATE INDEX IF NOT EXISTS map_key ON map (keyid);
-    CREATE INDEX IF NOT EXISTS map_obj_key ON map (objid, keyid);
     CREATE INDEX IF NOT EXISTS map_list ON map (listid);
 
     CREATE TABLE IF NOT EXISTS list (
@@ -161,6 +156,11 @@ def create_DB(conn):
     );
     CREATE INDEX IF NOT EXISTS list_id ON list (listid);
     CREATE INDEX IF NOT EXISTS list_value ON list (value);
+
+    CREATE TABLE IF NOT EXISTS sync_state (
+        peername STRING PRIMARY KEY,
+        last_received INTEGER NOT NULL
+    );
     """)
 
 def _sql_for_criteria(crit):
@@ -240,6 +240,44 @@ class DB(object):
         else:
             return None
 
+    def update_attr(self, objid, key, values):
+        objid = self._getId('obj', objid)
+        keyid = self._getId('key', key)
+        tstamp = self._query_single("SELECT timestamp FROM map WHERE objid = ? AND keyid = ?", (objid, keyid))
+        if values.t > tstamp:
+            newlistid = self.insert_list(values)
+            cursor = self.conn.cursor()
+            cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
+                            VALUES (?, ?, ?, ?)""",
+                            (objid, keyid, values.t, newlistid))
+            return cursor.lastrowid
+        else:
+            return False
+
+    def _get_list_id(self, values):
+        if not values:
+            return None
+        _values = set(values)
+        suspects = [x for (x,) in self._query_all("SELECT listid FROM list WHERE value = ?", (_values.pop(),) )]
+        while _values and suspects:
+            query = "SELECT listid FROM list WHERE value = ? AND listid IN (%s)" % ( ','.join(['?']*len(suspects)) )
+            suspects = [x for (x,) in self._query_all(query, [_values.pop()] + suspects)]
+        if suspects and (not _values):
+            query = "SELECT listid FROM list WHERE listid IN (%s) GROUP BY listid HAVING COUNT(value) = ?" % ( ','.join(['?']*len(suspects)) )
+            listid = self._query_single(query, suspects + [len(values)])
+            if listid:
+                return listid
+
+    def insert_list(self, values):
+        if not values:
+            return None
+        listid = self._get_list_id(values)
+        if listid:
+            return listid
+        newlistid = (self._query_single("SELECT MAX(listid) FROM list") or 0) + 1
+        self.conn.cursor().executemany("INSERT INTO list (listid, value) VALUES (?, ?)", ((newlistid, value) for value in values))
+        return newlistid
+
     def get_mtime(self, objid):
         return self._query_single("SELECT MAX(timestamp) FROM map NATURAL JOIN obj WHERE obj = ?", (objid,))
 
@@ -289,20 +327,18 @@ class DB(object):
 
     def update(self, obj):
         _dict = obj._dict
-        cursor = self.conn.cursor()
         objid = self._getId('obj', obj.id)
 
+        cursor = self.conn.cursor()
         for key in obj._dirty:
             values = _dict[key]
             keyid = self._getId('key', key)
             old_timestamp = self._query_single("SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
             if not old_timestamp or values.t > old_timestamp:
-                newlistid = str(values.gen_id())
-                if not self._query_first("SELECT listid FROM list WHERE listid = ?", (newlistid,)):
-                    c = cursor.executemany("INSERT INTO list (listid, value) VALUES (?, ?)", ((newlistid, value) for value in _dict[key]))
+                listid = self.insert_list(values)
                 cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
                                     VALUES (?, ?, ?, ?)""",
-                                    (objid, keyid, _dict[key].t, newlistid))
+                                    (objid, keyid, _dict[key].t, listid))
         obj._dirty.clear()
 
     def commit(self):
@@ -316,6 +352,22 @@ class DB(object):
         for x, in self._query_all("SELECT DISTINCT obj.objid FROM obj LEFT JOIN map ON (obj.objid = map.objid) WHERE map.objid IS NULL", ()):
             self.conn.execute("DELETE FROM obj WHERE obj.objid = ?", (x,))
         self.conn.execute("VACUUM")
+
+    def get_public_mappings_after(self, serial=0, limit=4096):
+        for obj, key, tstamp, serial, listid in self._query_all("SELECT obj, key, timestamp, serial, listid FROM map NATURAL JOIN key NATURAL JOIN obj WHERE serial > ? AND NOT key LIKE '@%' ORDER BY serial LIMIT ?", (serial, limit)):
+            values = set(x for x, in self._query_all("SELECT value FROM list WHERE listid = ?", (listid,)))
+            yield obj, key, tstamp, serial, values
+
+    def last_serial(self):
+        return self._query_single("SELECT MAX(serial) FROM map") or 0;
+
+    def get_sync_state(self, peername):
+        return {
+            "last_received": self._query_single("SELECT last_received FROM sync_state WHERE peername=?", (peername,)) or 0
+        }
+
+    def set_sync_state(self, peername, last_received):
+        self.conn.cursor().execute("INSERT OR REPLACE INTO sync_state (peername, last_received) VALUES (?, ?)", (peername, last_received))
 
 def open(config):
     return DB(config)
