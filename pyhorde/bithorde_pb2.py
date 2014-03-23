@@ -11,7 +11,7 @@ from google.protobuf import descriptor_pb2
 DESCRIPTOR = descriptor.FileDescriptor(
   name='bithorde.proto',
   package='bithorde',
-  serialized_pb='\n\x0e\x62ithorde.proto\x12\x08\x62ithorde\":\n\nIdentifier\x12 \n\x04type\x18\x01 \x02(\x0e\x32\x12.bithorde.HashType\x12\n\n\x02id\x18\x02 \x02(\x0c\"E\n\tHandShake\x12\x0c\n\x04name\x18\x01 \x02(\t\x12\x17\n\x0cprotoversion\x18\x02 \x02(\r:\x01\x32\x12\x11\n\tchallenge\x18\x03 \x01(\x0c\"d\n\x12HandShakeConfirmed\x12$\n\x06\x63ipher\x18\x01 \x01(\x0e\x32\x14.bithorde.CipherType\x12\x10\n\x08\x63ipheriv\x18\x02 \x01(\x0c\x12\x16\n\x0e\x61uthentication\x18\x03 \x02(\x0c\"\\\n\x08\x42indRead\x12\x0e\n\x06handle\x18\x01 \x02(\r\x12!\n\x03ids\x18\x02 \x03(\x0b\x32\x14.bithorde.Identifier\x12\x0c\n\x04uuid\x18\x03 \x02(\x04\x12\x0f\n\x07timeout\x18\x04 \x02(\r\";\n\tBindWrite\x12\x0e\n\x06handle\x18\x01 \x02(\r\x12\x0c\n\x04size\x18\x02 \x01(\x04\x12\x10\n\x08linkpath\x18\x03 \x01(\t\"\x86\x01\n\x0b\x41ssetStatus\x12\x0e\n\x06handle\x18\x01 \x02(\r\x12 \n\x06status\x18\x02 \x02(\x0e\x32\x10.bithorde.Status\x12!\n\x03ids\x18\x03 \x03(\x0b\x32\x14.bithorde.Identifier\x12\x0c\n\x04size\x18\x04 \x01(\x04\x12\x14\n\x0c\x61vailability\x18\x05 \x01(\r\"\xbd\x01\n\x04Read\x1aW\n\x07Request\x12\r\n\x05reqId\x18\x01 \x02(\r\x12\x0e\n\x06handle\x18\x02 \x02(\r\x12\x0e\n\x06offset\x18\x03 \x02(\x04\x12\x0c\n\x04size\x18\x04 \x02(\r\x12\x0f\n\x07timeout\x18\x05 \x02(\r\x1a\\\n\x08Response\x12\r\n\x05reqId\x18\x01 \x02(\r\x12 \n\x06status\x18\x02 \x02(\x0e\x32\x10.bithorde.Status\x12\x0e\n\x06offset\x18\x03 \x01(\x04\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\x0c\">\n\x0b\x44\x61taSegment\x12\x0e\n\x06handle\x18\x01 \x02(\r\x12\x0e\n\x06offset\x18\x02 \x02(\x04\x12\x0f\n\x07\x63ontent\x18\x03 \x02(\x0c\"\x17\n\x04Ping\x12\x0f\n\x07timeout\x18\x01 \x01(\r\"\xfb\x02\n\x06Stream\x12&\n\thandshake\x18\x01 \x02(\x0b\x32\x13.bithorde.HandShake\x12$\n\x08\x62indRead\x18\x02 \x03(\x0b\x32\x12.bithorde.BindRead\x12*\n\x0b\x61ssetStatus\x18\x03 \x03(\x0b\x32\x15.bithorde.AssetStatus\x12\'\n\x07readReq\x18\x05 \x03(\x0b\x32\x16.bithorde.Read.Request\x12(\n\x07readRes\x18\x06 \x03(\x0b\x32\x17.bithorde.Read.Response\x12&\n\tbindWrite\x18\x07 \x03(\x0b\x32\x13.bithorde.BindWrite\x12&\n\x07\x64\x61taSeg\x18\x08 \x03(\x0b\x32\x15.bithorde.DataSegment\x12\x36\n\x10handShakeConfirm\x18\t \x03(\x0b\x32\x1c.bithorde.HandShakeConfirmed\x12\x1c\n\x04ping\x18\n \x03(\x0b\x32\x0e.bithorde.Ping*:\n\x08HashType\x12\x08\n\x04SHA1\x10\x01\x12\n\n\x06SHA256\x10\x02\x12\x0e\n\nTREE_TIGER\x10\x03\x12\x08\n\x04\x45\x44\x32K\x10\x04*:\n\nCipherType\x12\r\n\tCLEARTEXT\x10\x00\x12\x07\n\x03XOR\x10\x01\x12\x07\n\x03RC4\x10\x02\x12\x0b\n\x07\x41\x45S_CTR\x10\x03*\x8c\x01\n\x06Status\x12\x08\n\x04NONE\x10\x00\x12\x0b\n\x07SUCCESS\x10\x01\x12\x0c\n\x08NOTFOUND\x10\x02\x12\x12\n\x0eINVALID_HANDLE\x10\x03\x12\x0e\n\nWOULD_LOOP\x10\x04\x12\x10\n\x0c\x44ISCONNECTED\x10\x05\x12\x0b\n\x07TIMEOUT\x10\x06\x12\x0f\n\x0bNORESOURCES\x10\x07\x12\t\n\x05\x45RROR\x10\x08')
+  serialized_pb='\n\x0e\x62ithorde.proto\x12\x08\x62ithorde\":\n\nIdentifier\x12 \n\x04type\x18\x01 \x02(\x0e\x32\x12.bithorde.HashType\x12\n\n\x02id\x18\x02 \x02(\x0c\"E\n\tHandShake\x12\x0c\n\x04name\x18\x01 \x02(\t\x12\x17\n\x0cprotoversion\x18\x02 \x02(\r:\x01\x32\x12\x11\n\tchallenge\x18\x03 \x01(\x0c\"d\n\x12HandShakeConfirmed\x12$\n\x06\x63ipher\x18\x01 \x01(\x0e\x32\x14.bithorde.CipherType\x12\x10\n\x08\x63ipheriv\x18\x02 \x01(\x0c\x12\x16\n\x0e\x61uthentication\x18\x03 \x02(\x0c\"b\n\x08\x42indRead\x12\x0e\n\x06handle\x18\x01 \x02(\r\x12!\n\x03ids\x18\x02 \x03(\x0b\x32\x14.bithorde.Identifier\x12\x12\n\nrequesters\x18\x03 \x03(\x04\x12\x0f\n\x07timeout\x18\x04 \x02(\r\";\n\tBindWrite\x12\x0e\n\x06handle\x18\x01 \x02(\r\x12\x0c\n\x04size\x18\x02 \x01(\x04\x12\x10\n\x08linkpath\x18\x03 \x01(\t\"\x97\x01\n\x0b\x41ssetStatus\x12\x0e\n\x06handle\x18\x01 \x02(\r\x12 \n\x06status\x18\x02 \x02(\x0e\x32\x10.bithorde.Status\x12!\n\x03ids\x18\x03 \x03(\x0b\x32\x14.bithorde.Identifier\x12\x0c\n\x04size\x18\x04 \x01(\x04\x12\x14\n\x0c\x61vailability\x18\x05 \x01(\r\x12\x0f\n\x07servers\x18\x06 \x03(\x04\"\xbd\x01\n\x04Read\x1aW\n\x07Request\x12\r\n\x05reqId\x18\x01 \x02(\r\x12\x0e\n\x06handle\x18\x02 \x02(\r\x12\x0e\n\x06offset\x18\x03 \x02(\x04\x12\x0c\n\x04size\x18\x04 \x02(\r\x12\x0f\n\x07timeout\x18\x05 \x02(\r\x1a\\\n\x08Response\x12\r\n\x05reqId\x18\x01 \x02(\r\x12 \n\x06status\x18\x02 \x02(\x0e\x32\x10.bithorde.Status\x12\x0e\n\x06offset\x18\x03 \x01(\x04\x12\x0f\n\x07\x63ontent\x18\x04 \x01(\x0c\">\n\x0b\x44\x61taSegment\x12\x0e\n\x06handle\x18\x01 \x02(\r\x12\x0e\n\x06offset\x18\x02 \x02(\x04\x12\x0f\n\x07\x63ontent\x18\x03 \x02(\x0c\"\x17\n\x04Ping\x12\x0f\n\x07timeout\x18\x01 \x01(\r\"\xfb\x02\n\x06Stream\x12&\n\thandshake\x18\x01 \x02(\x0b\x32\x13.bithorde.HandShake\x12$\n\x08\x62indRead\x18\x02 \x03(\x0b\x32\x12.bithorde.BindRead\x12*\n\x0b\x61ssetStatus\x18\x03 \x03(\x0b\x32\x15.bithorde.AssetStatus\x12\'\n\x07readReq\x18\x05 \x03(\x0b\x32\x16.bithorde.Read.Request\x12(\n\x07readRes\x18\x06 \x03(\x0b\x32\x17.bithorde.Read.Response\x12&\n\tbindWrite\x18\x07 \x03(\x0b\x32\x13.bithorde.BindWrite\x12&\n\x07\x64\x61taSeg\x18\x08 \x03(\x0b\x32\x15.bithorde.DataSegment\x12\x36\n\x10handShakeConfirm\x18\t \x03(\x0b\x32\x1c.bithorde.HandShakeConfirmed\x12\x1c\n\x04ping\x18\n \x03(\x0b\x32\x0e.bithorde.Ping*:\n\x08HashType\x12\x08\n\x04SHA1\x10\x01\x12\n\n\x06SHA256\x10\x02\x12\x0e\n\nTREE_TIGER\x10\x03\x12\x08\n\x04\x45\x44\x32K\x10\x04*:\n\nCipherType\x12\r\n\tCLEARTEXT\x10\x00\x12\x07\n\x03XOR\x10\x01\x12\x07\n\x03RC4\x10\x02\x12\x0b\n\x07\x41\x45S_CTR\x10\x03*\x8c\x01\n\x06Status\x12\x08\n\x04NONE\x10\x00\x12\x0b\n\x07SUCCESS\x10\x01\x12\x0c\n\x08NOTFOUND\x10\x02\x12\x12\n\x0eINVALID_HANDLE\x10\x03\x12\x0e\n\nWOULD_LOOP\x10\x04\x12\x10\n\x0c\x44ISCONNECTED\x10\x05\x12\x0b\n\x07TIMEOUT\x10\x06\x12\x0f\n\x0bNORESOURCES\x10\x07\x12\t\n\x05\x45RROR\x10\x08')
 
 _HASHTYPE = descriptor.EnumDescriptor(
   name='HashType',
@@ -38,8 +38,8 @@ _HASHTYPE = descriptor.EnumDescriptor(
   ],
   containing_type=None,
   options=None,
-  serialized_start=1216,
-  serialized_end=1274,
+  serialized_start=1239,
+  serialized_end=1297,
 )
 
 
@@ -68,8 +68,8 @@ _CIPHERTYPE = descriptor.EnumDescriptor(
   ],
   containing_type=None,
   options=None,
-  serialized_start=1276,
-  serialized_end=1334,
+  serialized_start=1299,
+  serialized_end=1357,
 )
 
 
@@ -118,8 +118,8 @@ _STATUS = descriptor.EnumDescriptor(
   ],
   containing_type=None,
   options=None,
-  serialized_start=1337,
-  serialized_end=1477,
+  serialized_start=1360,
+  serialized_end=1500,
 )
 
 
@@ -284,9 +284,9 @@ _BINDREAD = descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     descriptor.FieldDescriptor(
-      name='uuid', full_name='bithorde.BindRead.uuid', index=2,
-      number=3, type=4, cpp_type=4, label=2,
-      has_default_value=False, default_value=0,
+      name='requesters', full_name='bithorde.BindRead.requesters', index=2,
+      number=3, type=4, cpp_type=4, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -307,7 +307,7 @@ _BINDREAD = descriptor.Descriptor(
   is_extendable=False,
   extension_ranges=[],
   serialized_start=261,
-  serialized_end=353,
+  serialized_end=359,
 )
 
 
@@ -348,8 +348,8 @@ _BINDWRITE = descriptor.Descriptor(
   options=None,
   is_extendable=False,
   extension_ranges=[],
-  serialized_start=355,
-  serialized_end=414,
+  serialized_start=361,
+  serialized_end=420,
 )
 
 
@@ -395,6 +395,13 @@ _ASSETSTATUS = descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
+    descriptor.FieldDescriptor(
+      name='servers', full_name='bithorde.AssetStatus.servers', index=5,
+      number=6, type=4, cpp_type=4, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
   ],
   extensions=[
   ],
@@ -404,8 +411,8 @@ _ASSETSTATUS = descriptor.Descriptor(
   options=None,
   is_extendable=False,
   extension_ranges=[],
-  serialized_start=417,
-  serialized_end=551,
+  serialized_start=423,
+  serialized_end=574,
 )
 
 
@@ -460,8 +467,8 @@ _READ_REQUEST = descriptor.Descriptor(
   options=None,
   is_extendable=False,
   extension_ranges=[],
-  serialized_start=562,
-  serialized_end=649,
+  serialized_start=585,
+  serialized_end=672,
 )
 
 _READ_RESPONSE = descriptor.Descriptor(
@@ -508,8 +515,8 @@ _READ_RESPONSE = descriptor.Descriptor(
   options=None,
   is_extendable=False,
   extension_ranges=[],
-  serialized_start=651,
-  serialized_end=743,
+  serialized_start=674,
+  serialized_end=766,
 )
 
 _READ = descriptor.Descriptor(
@@ -528,8 +535,8 @@ _READ = descriptor.Descriptor(
   options=None,
   is_extendable=False,
   extension_ranges=[],
-  serialized_start=554,
-  serialized_end=743,
+  serialized_start=577,
+  serialized_end=766,
 )
 
 
@@ -570,8 +577,8 @@ _DATASEGMENT = descriptor.Descriptor(
   options=None,
   is_extendable=False,
   extension_ranges=[],
-  serialized_start=745,
-  serialized_end=807,
+  serialized_start=768,
+  serialized_end=830,
 )
 
 
@@ -598,8 +605,8 @@ _PING = descriptor.Descriptor(
   options=None,
   is_extendable=False,
   extension_ranges=[],
-  serialized_start=809,
-  serialized_end=832,
+  serialized_start=832,
+  serialized_end=855,
 )
 
 
@@ -682,8 +689,8 @@ _STREAM = descriptor.Descriptor(
   options=None,
   is_extendable=False,
   extension_ranges=[],
-  serialized_start=835,
-  serialized_end=1214,
+  serialized_start=858,
+  serialized_end=1237,
 )
 
 _IDENTIFIER.fields_by_name['type'].enum_type = _HASHTYPE
