@@ -1,4 +1,42 @@
+from bithorde_eventlet import parseHashIds, message
+from time import time
+from db import ValueSet
 
+ASSET_WAIT_FACTOR = 0.01
+def cachedAssetLiveChecker(bithorde, assets, db=None):
+    t = time()
+
+    def hasValidStatus(dbAsset):
+        try:
+            dbStatus = dbAsset['bh_status']
+            dbConfirmedStatus = dbAsset['bh_status_confirmed']
+        except KeyError:
+            return None
+        stable = dbConfirmedStatus.t - dbStatus.t
+        nextCheck = dbConfirmedStatus.t + (stable * ASSET_WAIT_FACTOR)
+        if t < nextCheck:
+            return dbStatus
+        else:
+            return None
+
+    def checkAsset(dbAsset):
+        dbStatus = hasValidStatus(dbAsset)
+        if dbStatus:
+            return dbAsset, bool(dbStatus.any())
+
+        ids = parseHashIds(dbAsset['xt'])
+        if not ids:
+            return dbAsset, None
+
+        with bithorde.open(ids) as bhAsset:
+            status_ok = bhAsset.status().status == message.SUCCESS
+            if db:
+                dbAsset[u'bh_status'] = ValueSet((unicode(status_ok),), t=t)
+                dbAsset[u'bh_status_confirmed'] = ValueSet((unicode(t),), t=t)
+                db.update(dbAsset)
+            return dbAsset, status_ok
+
+    return bithorde.pool().imap(checkAsset, assets)
 
 class Counter(object):
     def __init__(self):

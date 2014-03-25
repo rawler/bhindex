@@ -155,15 +155,21 @@ class Client:
 
 tiger_hash = re.compile(r'tiger:(\w{39})')
 def parseHashIds(ids):
-    m = tiger_hash.search(ids)
-    if m:
-        try:
-            id = b32decode(m.group(1)+'=')
-        except TypeError:
-            return None
-        return [message.Identifier(type=message.TREE_TIGER, id=id)]
-    else:
-        return None
+    if not hasattr(ids, '__iter__'):
+        ids = (ids,)
+
+    res = list()
+    for id in ids:
+        m = tiger_hash.search(id)
+        if m:
+            try:
+                id = b32decode(m.group(1)+'=')
+                res.append(message.Identifier(type=message.TREE_TIGER, id=id))
+            except TypeError:
+                pass
+        else:
+            pass
+    return res
 
 def parseConfig(c):
     return dict(
@@ -187,8 +193,8 @@ if __name__ == '__main__':
                 return asset.status()
         else:
             print "Warning, failed to parse: ", addr
-    
+
     # Run a bunch in parallel, controlled by a pool
     for status in client.pool().imap(check_asset, sys.argv[1:]):
         if status:
-            print status        
+            print status

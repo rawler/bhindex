@@ -8,6 +8,7 @@ import subprocess
 from time import time
 
 from bithorde_eventlet import Client, parseHashIds, parseConfig, message
+from util import cachedAssetLiveChecker
 
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
@@ -51,51 +52,17 @@ def path_in_prefixes(path, prefixes):
             return True
     return False
 
-def hashIdsForAsset(asset):
-    for id in asset['xt']:
-        ids = parseHashIds(id)
-        if ids:
-            return ids
-
 def main(force_all=False, prefixes=[]):
     DB = db.open(config)
     bithorde = Client(parseConfig(config.items('BITHORDE')))
 
     t = time()
 
-    def hasValidStatus(dbAsset):
-        try:
-            dbStatus = dbAsset['bh_status']
-            dbConfirmedStatus = dbAsset['bh_status_confirmed']
-        except KeyError:
-            return None
-        stable = dbConfirmedStatus.t - dbStatus.t
-        nextCheck = dbConfirmedStatus.t + (stable * 0.01)
-        if t < nextCheck:
-            return dbStatus
-        else:
-            return None
-
-    def checkAsset(dbAsset):
-        if dbAsset.get(u'@linked') and not force_all:
-            return dbAsset, None
-        dbStatus = hasValidStatus(dbAsset)
-        if dbStatus:
-            return dbAsset, bool(dbStatus.any())
-
-        ids = hashIdsForAsset(dbAsset)
-        if not ids:
-            return dbAsset, None
-
-        with bithorde.open(ids) as bhAsset:
-            status_ok = bhAsset.status().status == message.SUCCESS
-            dbAsset[u'bh_status'] = db.ValueSet((unicode(status_ok),), t=t)
-            dbAsset[u'bh_status_confirmed'] = db.ValueSet((unicode(t),), t=t)
-            DB.update(dbAsset)
-            return dbAsset, status_ok
-
     assets = DB.query({'path': db.ANY, 'xt': db.ANY})
-    for asset, status_ok in bithorde.pool().imap(checkAsset, assets):
+    if not force_all:
+        assets = (a for a in assets if not a.get('@linked'))
+
+    for asset, status_ok in cachedAssetLiveChecker(bithorde, assets, db=DB):
         if not status_ok:
             continue
 
