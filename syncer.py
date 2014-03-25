@@ -188,7 +188,7 @@ def parse_addr(addr):
         return addr[0]
 
 config = config.read()
-sync_config = dict(x for x in config.items('LIVESYNC'))
+sync_config = config.items('LIVESYNC')
 sync_config = {
     'name': sync_config['name'],
     'port': int(sync_config['port']),

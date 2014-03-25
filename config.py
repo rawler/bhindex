@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os.path as path
-from ConfigParser import SafeConfigParser as ConfigParser
+from ConfigParser import SafeConfigParser as ConfigParser, NoOptionError
 from socket import gethostname
 
 HERE = path.dirname(__file__)
@@ -22,14 +22,17 @@ class VersioningConfigParser(ConfigParser):
         return res
 
     def items(self, section, raw=None, vars=None):
-        res = ConfigParser.items(self, section, raw, vars)
+        res = dict(ConfigParser.items(self, section, raw, vars))
         for (new_section, new_key), (old_section, old_key) in self.deprecations.iteritems():
             if section == new_section:
-                value = self.get(old_section, old_key)
-                if value:
+                if new_key in res:
+                    continue
+                try:
+                    value = self.get(old_section, old_key)
                     print "WARNING, Deprecation: %s.%s in config renamed to %s.%s" % (old_section, old_option, section, option)
-                    if new_key not in res:
-                        res[new_key] = value
+                    res[new_key] = value
+                except NoOptionError:
+                    continue
         return res
 
 CONFIG_DEFAULTS = {
