@@ -7,7 +7,7 @@ from optparse import OptionParser
 import subprocess
 from time import time
 
-from bithorde_eventlet import Client, parseHashIds, parseConfig, message
+from bithorde_eventlet import Client, parseConfig
 from util import cachedAssetLiveChecker
 
 HERE = path.dirname(__file__)
@@ -25,7 +25,7 @@ def link(linkpath, tgt):
 
     if oldtgt == tgt:
         return True
-    elif oldtgt: 
+    elif oldtgt:
         try: os.unlink(linkpath)
         except OSError as e:
             print "Failed to remove old link %s:" % oldtgt
@@ -58,11 +58,10 @@ def main(force_all=False, prefixes=[]):
 
     t = time()
 
-    assets = DB.query({'path': db.ANY, 'xt': db.ANY})
+    crit = {'path': db.ANY, 'xt': db.ANY}
     if not force_all:
-        assets = (a for a in assets if not a.get('@linked'))
-
-    for asset, status_ok in cachedAssetLiveChecker(bithorde, assets, db=DB):
+        crit['@linked'] = None
+    for asset, status_ok in cachedAssetLiveChecker(bithorde, DB.query(crit), db=DB):
         if not status_ok:
             continue
 
@@ -79,7 +78,7 @@ def main(force_all=False, prefixes=[]):
             tgt = path.join(BHFUSEDIR, magnet.fromDbObject(asset))
             print u"Linking %s -> %s" % (dst, tgt)
             if not link(dst, tgt):
-                success = False 
+                success = False
 
         if success:
                 asset[u'@linked'] = db.ValueSet((u'true',), t=t)

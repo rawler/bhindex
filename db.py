@@ -70,7 +70,7 @@ class Object(object):
         assert isinstance(value, ValueSet)
 
         key = key.lower()
-        if key not in self._dict or (value.t >= self._dict[key].t and self._dict[key] != value):
+        if key not in self._dict or (self._dict[key] != value and value.t >= self._dict[key].t):
             self._dirty.add(key)
             self._dict[key] = value
 
@@ -166,17 +166,25 @@ def create_DB(conn):
 def _sql_for_criteria(crit):
     sql = []
     params = []
-    match_query = """SELECT DISTINCT objid FROM map 
+    match_query = """SELECT DISTINCT objid FROM map
                         NATURAL JOIN list
                         NATURAL JOIN key
                      WHERE key = ? AND list.value LIKE ?"""
     any_query =   """SELECT DISTINCT objid FROM map
                         NATURAL JOIN key
                      WHERE key = ?"""
+    absent_query =   """SELECT DISTINCT objid FROM obj
+                            WHERE objid NOT IN (
+                                SELECT objid FROM map
+                                    NATURAL JOIN key
+                                    WHERE key = ? AND listid IS NOT NULL
+                            )"""
     for k,v in crit.iteritems():
         params.append(k)
         if v is ANY:
             sql.append(any_query)
+        elif v is None:
+            sql.append(absent_query)
         elif isinstance(v, Starts):
             sql.append(match_query)
             params.append(v+'%')
