@@ -4,7 +4,7 @@ import os.path as path
 from ConfigParser import SafeConfigParser as ConfigParser, NoOptionError
 from socket import gethostname
 
-HERE = path.dirname(__file__)
+HERE = path.dirname(path.abspath(__file__))
 DEFAULT_CONFIG = path.join(HERE, 'my.config')
 
 class VersioningConfigParser(ConfigParser):
