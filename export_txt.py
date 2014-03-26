@@ -5,22 +5,16 @@ import os, os.path as path, shutil, sys, json
 from ConfigParser import ConfigParser
 import subprocess
 
-import bithorde
+from bithorde_eventlet import Client, parseConfig
+from util import cachedAssetLiveChecker, Counter
 
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config, magnet, util
+import db, config, magnet
 config = config.read()
 
 TXTPATH = config.get('TXTSYNC', 'exportpath')
-ADDRESS = config.get('BITHORDE', 'address')
-
-def list_db(db):
-    for asset in db.query({'path': db.ANY, 'name': db.ANY, 'xt': db.ANY}):
-        assert asset.id.startswith(magnet.XT_PREFIX_TIGER)
-        tigerhash = bithorde.b32decode(asset.id[len(magnet.XT_PREFIX_TIGER):])
-        yield asset, {bithorde.message.TREE_TIGER: tigerhash}
 
 class Encoder(json.JSONEncoder):
     def __init__(self, all_attributes=False, *args, **kwargs):
@@ -55,30 +49,27 @@ def main(outfile = None, all_objects = False, all_attributes = False):
     count = util.Counter()
     storage = util.Counter()
     encoder = Encoder.configured(all_attributes=all_attributes)
+    bithorde = Client(parseConfig(config.items('BITHORDE')))
 
-    def writeOut(db_asset):
-        if int(count):
-            tmpfile.write(',\n')
-        count.inc()
-        json.dump(db_asset, tmpfile, cls=encoder, indent=2)
+    with open(tmppath, 'w') as tmpfile:
+        tmpfile.write('[')
 
-    def onStatusUpdate(asset, status, db_asset):
-        if status.status == bithorde.message.SUCCESS:
-            storage.inc(status.size)
-            writeOut(db_asset)
+        assets = DB.query({'path': db.ANY, 'name': db.ANY, 'xt': db.ANY})
+        if all_objects:
+            assets = ((a, True) for a in assets)
+        else:
+            assets = cachedAssetLiveChecker(bithorde, assets, db=DB)
 
-    tmpfile.write('[')
+        for dbAsset, status_ok in assets:
+            if not status_ok:
+                continue
+            if count.inc() > 1:
+                tmpfile.write(',\n')
+            json.dump(dbAsset, tmpfile, cls=encoder, indent=2)
+            storage.inc(int(dbAsset['filesize'].any() or 0))
+        DB.commit()
 
-    if all_objects:
-        for db_asset, _ in list_db(DB):
-            writeOut(db_asset)
-    else:
-        client = bithorde.BitHordeIteratorClient(list_db(DB), onStatusUpdate)
-        bithorde.connect(ADDRESS, client)
-        bithorde.reactor.run()
-
-    tmpfile.write(']')
-    tmpfile.close()
+        tmpfile.write(']')
 
     if os.path.exists(outfile):
         shutil.copymode(outfile, tmppath)
