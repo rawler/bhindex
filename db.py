@@ -121,47 +121,50 @@ class Object(object):
         return u"db.Object {\n%s\n}" % u'\n'.join(u" %s: %s" % x for x in self.iteritems())
 
 def create_DB(conn):
-    conn.executescript("""
-    CREATE TABLE IF NOT EXISTS obj (
-        objid INTEGER PRIMARY KEY AUTOINCREMENT,
-        obj TEXT UNIQUE NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS obj_obj ON obj (obj);
+    with conn:
+        conn.executescript("""
+        PRAGMA journal_mode=WAL;
 
-    CREATE TABLE IF NOT EXISTS key (
-        keyid INTEGER PRIMARY KEY AUTOINCREMENT,
-        key TEXT UNIQUE NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS key_key ON key (key);
+        CREATE TABLE IF NOT EXISTS obj (
+            objid INTEGER PRIMARY KEY AUTOINCREMENT,
+            obj TEXT UNIQUE NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS obj_obj ON obj (obj);
 
-    CREATE TABLE IF NOT EXISTS map (
-        serial INTEGER NOT NULL PRIMARY KEY,
-        objid INTEGER NOT NULL,
-        keyid INTEGER NOT NULL,
-        timestamp INTEGER NOT NULL,
-        listid INTEGER,
-        UNIQUE (objid, keyid),
-        FOREIGN KEY (objid) REFERENCES obj (objid),
-        FOREIGN KEY (keyid) REFERENCES key (keyid),
-        FOREIGN KEY (listid) REFERENCES list (listid)
-    );
-    CREATE INDEX IF NOT EXISTS map_key ON map (keyid);
-    CREATE INDEX IF NOT EXISTS map_list ON map (listid);
+        CREATE TABLE IF NOT EXISTS key (
+            keyid INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT UNIQUE NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS key_key ON key (key);
 
-    CREATE TABLE IF NOT EXISTS list (
-        itemid INTEGER PRIMARY KEY AUTOINCREMENT,
-        listid INTEGER NOT NULL,
-        value TEXT NOT NULL,
-        CONSTRAINT unique_list_value UNIQUE (listid, value) ON CONFLICT IGNORE
-    );
-    CREATE INDEX IF NOT EXISTS list_id ON list (listid);
-    CREATE INDEX IF NOT EXISTS list_value ON list (value);
+        CREATE TABLE IF NOT EXISTS map (
+            serial INTEGER NOT NULL PRIMARY KEY,
+            objid INTEGER NOT NULL,
+            keyid INTEGER NOT NULL,
+            timestamp INTEGER NOT NULL,
+            listid INTEGER,
+            UNIQUE (objid, keyid),
+            FOREIGN KEY (objid) REFERENCES obj (objid),
+            FOREIGN KEY (keyid) REFERENCES key (keyid),
+            FOREIGN KEY (listid) REFERENCES list (listid)
+        );
+        CREATE INDEX IF NOT EXISTS map_key ON map (keyid);
+        CREATE INDEX IF NOT EXISTS map_list ON map (listid);
 
-    CREATE TABLE IF NOT EXISTS sync_state (
-        peername STRING PRIMARY KEY,
-        last_received INTEGER NOT NULL
-    );
-    """)
+        CREATE TABLE IF NOT EXISTS list (
+            itemid INTEGER PRIMARY KEY AUTOINCREMENT,
+            listid INTEGER NOT NULL,
+            value TEXT NOT NULL,
+            CONSTRAINT unique_list_value UNIQUE (listid, value) ON CONFLICT IGNORE
+        );
+        CREATE INDEX IF NOT EXISTS list_id ON list (listid);
+        CREATE INDEX IF NOT EXISTS list_value ON list (value);
+
+        CREATE TABLE IF NOT EXISTS sync_state (
+            peername STRING PRIMARY KEY,
+            last_received INTEGER NOT NULL
+        );
+        """)
 
 def _sql_for_criteria(crit):
     sql = []
@@ -199,9 +202,12 @@ class DB(object):
     Starts = Starts
 
     def __init__(self, config):
-        self.conn = sqlite3.connect(config.get('DB', 'file'))
+        self.conn = sqlite3.connect(config.get('DB', 'file'), timeout=20)
         create_DB(self.conn)
         self.__idCache = dict()
+
+    def transaction(self):
+        return self.conn
 
     def _query_all(self, query, args):
         c = self.conn.cursor()
@@ -361,7 +367,7 @@ class DB(object):
             self.conn.execute("DELETE FROM obj WHERE obj.objid = ?", (x,))
         self.conn.execute("VACUUM")
 
-    def get_public_mappings_after(self, serial=0, limit=4096):
+    def get_public_mappings_after(self, serial=0, limit=1024):
         for obj, key, tstamp, serial, listid in self._query_all("SELECT obj, key, timestamp, serial, listid FROM map NATURAL JOIN key NATURAL JOIN obj WHERE serial > ? AND NOT key LIKE '@%' ORDER BY serial LIMIT ?", (serial, limit)):
             values = set(x for x, in self._query_all("SELECT value FROM list WHERE listid = ?", (listid,)))
             yield obj, key, tstamp, serial, values

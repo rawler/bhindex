@@ -36,7 +36,9 @@ def cachedAssetLiveChecker(bithorde, assets, db=None):
             if status.size is not None:
                 dbAsset[u'filesize'] = ValueSet((unicode(status.size),), t=t)
             if db:
-                db.update(dbAsset)
+                with db.transaction():
+                    db.update(dbAsset)
+
             return dbAsset, status_ok
 
     return bithorde.pool().imap(checkAsset, assets)

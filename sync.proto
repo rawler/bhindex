@@ -14,14 +14,17 @@ message Update {
   required string key = 2;
   required int64 tstamp = 3;
   repeated string values = 4;
-  required int64 serial = 5;
 }
 
+message Checkpoint {
+  required int64 serial = 1;
+}
 
 message Stream
 {
-  required Hello hello                  = 1;
-  required Setup setup                  = 2;
-  repeated Update update                = 3;
+  required Hello hello           = 1;
+  required Setup setup           = 2;
+  repeated Update update         = 3;
+  repeated Checkpoint checkpoint = 4;
 }
 

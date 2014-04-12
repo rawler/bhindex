@@ -11,7 +11,7 @@ from google.protobuf import descriptor_pb2
 DESCRIPTOR = descriptor.FileDescriptor(
   name='sync.proto',
   package='bhindex.sync',
-  serialized_pb='\n\nsync.proto\x12\x0c\x62hindex.sync\"\x15\n\x05Hello\x12\x0c\n\x04name\x18\x01 \x02(\t\"@\n\x05Setup\x12\x19\n\x11last_serial_in_db\x18\x01 \x02(\x04\x12\x1c\n\x14last_serial_received\x18\x02 \x02(\x04\"R\n\x06Update\x12\x0b\n\x03obj\x18\x01 \x02(\t\x12\x0b\n\x03key\x18\x02 \x02(\t\x12\x0e\n\x06tstamp\x18\x03 \x02(\x03\x12\x0e\n\x06values\x18\x04 \x03(\t\x12\x0e\n\x06serial\x18\x05 \x02(\x03\"v\n\x06Stream\x12\"\n\x05hello\x18\x01 \x02(\x0b\x32\x13.bhindex.sync.Hello\x12\"\n\x05setup\x18\x02 \x02(\x0b\x32\x13.bhindex.sync.Setup\x12$\n\x06update\x18\x03 \x03(\x0b\x32\x14.bhindex.sync.Update')
+  serialized_pb='\n\nsync.proto\x12\x0c\x62hindex.sync\"\x15\n\x05Hello\x12\x0c\n\x04name\x18\x01 \x02(\t\"@\n\x05Setup\x12\x19\n\x11last_serial_in_db\x18\x01 \x02(\x04\x12\x1c\n\x14last_serial_received\x18\x02 \x02(\x04\"B\n\x06Update\x12\x0b\n\x03obj\x18\x01 \x02(\t\x12\x0b\n\x03key\x18\x02 \x02(\t\x12\x0e\n\x06tstamp\x18\x03 \x02(\x03\x12\x0e\n\x06values\x18\x04 \x03(\t\"\x1c\n\nCheckpoint\x12\x0e\n\x06serial\x18\x01 \x02(\x03\"\xa4\x01\n\x06Stream\x12\"\n\x05hello\x18\x01 \x02(\x0b\x32\x13.bhindex.sync.Hello\x12\"\n\x05setup\x18\x02 \x02(\x0b\x32\x13.bhindex.sync.Setup\x12$\n\x06update\x18\x03 \x03(\x0b\x32\x14.bhindex.sync.Update\x12,\n\ncheckpoint\x18\x04 \x03(\x0b\x32\x18.bhindex.sync.Checkpoint')
 
 
 
@@ -114,9 +114,30 @@ _UPDATE = descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  options=None,
+  is_extendable=False,
+  extension_ranges=[],
+  serialized_start=117,
+  serialized_end=183,
+)
+
+
+_CHECKPOINT = descriptor.Descriptor(
+  name='Checkpoint',
+  full_name='bhindex.sync.Checkpoint',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
     descriptor.FieldDescriptor(
-      name='serial', full_name='bhindex.sync.Update.serial', index=4,
-      number=5, type=3, cpp_type=2, label=2,
+      name='serial', full_name='bhindex.sync.Checkpoint.serial', index=0,
+      number=1, type=3, cpp_type=2, label=2,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -130,8 +151,8 @@ _UPDATE = descriptor.Descriptor(
   options=None,
   is_extendable=False,
   extension_ranges=[],
-  serialized_start=117,
-  serialized_end=199,
+  serialized_start=185,
+  serialized_end=213,
 )
 
 
@@ -163,6 +184,13 @@ _STREAM = descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
+    descriptor.FieldDescriptor(
+      name='checkpoint', full_name='bhindex.sync.Stream.checkpoint', index=3,
+      number=4, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
   ],
   extensions=[
   ],
@@ -172,16 +200,18 @@ _STREAM = descriptor.Descriptor(
   options=None,
   is_extendable=False,
   extension_ranges=[],
-  serialized_start=201,
-  serialized_end=319,
+  serialized_start=216,
+  serialized_end=380,
 )
 
 _STREAM.fields_by_name['hello'].message_type = _HELLO
 _STREAM.fields_by_name['setup'].message_type = _SETUP
 _STREAM.fields_by_name['update'].message_type = _UPDATE
+_STREAM.fields_by_name['checkpoint'].message_type = _CHECKPOINT
 DESCRIPTOR.message_types_by_name['Hello'] = _HELLO
 DESCRIPTOR.message_types_by_name['Setup'] = _SETUP
 DESCRIPTOR.message_types_by_name['Update'] = _UPDATE
+DESCRIPTOR.message_types_by_name['Checkpoint'] = _CHECKPOINT
 DESCRIPTOR.message_types_by_name['Stream'] = _STREAM
 
 class Hello(message.Message):
@@ -201,6 +231,12 @@ class Update(message.Message):
   DESCRIPTOR = _UPDATE
   
   # @@protoc_insertion_point(class_scope:bhindex.sync.Update)
+
+class Checkpoint(message.Message):
+  __metaclass__ = reflection.GeneratedProtocolMessageType
+  DESCRIPTOR = _CHECKPOINT
+  
+  # @@protoc_insertion_point(class_scope:bhindex.sync.Checkpoint)
 
 class Stream(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType

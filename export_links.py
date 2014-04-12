@@ -82,8 +82,8 @@ def main(force_all=False, prefixes=[]):
 
         if success:
                 asset[u'@linked'] = db.ValueSet((u'true',), t=t)
-                DB.update(asset)
-    DB.commit()
+                with DB.transaction():
+                    DB.update(asset)
 
 if __name__=='__main__':
     parser = OptionParser(usage="usage: %prog [options] [path...]")
