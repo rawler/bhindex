@@ -195,7 +195,7 @@ class SyncServer(object):
                 logging.debug("Handshaking for sock %s with connectAddress %s", sock, connectAddress or 'Unknown')
                 with self._db.transaction():
                     conn.handshake()
-            except:
+            except Exception:
                 logging.exception("Handshake failed for sock %s with connectAddress %s", sock, connectAddress or 'Unknown')
                 self._handshakefail += 1
                 if self._handshakefail >= 5:
@@ -213,7 +213,7 @@ class SyncServer(object):
 
             try:
                 conn.run()
-            except:
+            except Exception:
                 logging.exception("%s died", peername)
 
             logging.info('%s disconnected from %s', conn.peername, client_addr)
@@ -223,7 +223,7 @@ class SyncServer(object):
         def _connect(addr):
             try:
                 return addr, eventlet.connect(addr)
-            except:
+            except Exception:
                 return addr, None
 
         connectPool = eventlet.GreenPool(20)
@@ -239,7 +239,7 @@ class SyncServer(object):
                 for conn in self.connections.values():
                     try:
                         conn.db_push()
-                    except:
+                    except Exception:
                         logging.exception("%s push hit error", conn.peername)
                         conn.shutdown()
                         self.connections.pop(conn.peername, None)
