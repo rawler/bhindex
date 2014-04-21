@@ -1,10 +1,26 @@
+import eventlet
 from bithorde_eventlet import parseHashIds, message
 from time import time
 from db import ValueSet
 
+class DelayedAction(object):
+    def __init__(self, action):
+        self.action = action
+        self._scheduled = None
+
+    def schedule(self, delay):
+        if self._scheduled is None:
+            self._scheduled = eventlet.spawn_after(delay, self._fire)
+
+    def _fire(self):
+        self._scheduled = None
+        self.action()
+
 ASSET_WAIT_FACTOR = 0.01
 def cachedAssetLiveChecker(bithorde, assets, db=None):
     t = time()
+    dirty = Counter()
+    commit_pending = DelayedAction(db.commit)
 
     def hasValidStatus(dbAsset):
         try:
@@ -34,10 +50,13 @@ def cachedAssetLiveChecker(bithorde, assets, db=None):
             dbAsset[u'bh_status'] = ValueSet((unicode(status_ok),), t=t)
             dbAsset[u'bh_status_confirmed'] = ValueSet((unicode(t),), t=t)
             if status.size is not None:
+                if status.size > 2**40:
+                    print dbAsset['xt']
+                    print status.size
                 dbAsset[u'filesize'] = ValueSet((unicode(status.size),), t=t)
             if db:
-                with db.transaction():
-                    db.update(dbAsset)
+                db.update(dbAsset)
+                commit_pending.schedule(0.3)
 
             return dbAsset, status_ok
 
