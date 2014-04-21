@@ -202,7 +202,7 @@ class DB(object):
     Starts = Starts
 
     def __init__(self, config):
-        self.conn = sqlite3.connect(config.get('DB', 'file'), timeout=20)
+        self.conn = sqlite3.connect(config.get('DB', 'file'), timeout=60)
         create_DB(self.conn)
         self.__idCache = dict()
 
