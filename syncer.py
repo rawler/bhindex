@@ -104,7 +104,8 @@ class SyncConnection(object):
                 self._fill_buf()
 
     def shutdown(self):
-        self._sock.shutdown()
+        if self._sock:
+            self._sock.shutdown(socket.SHUT_WR)
 
     def close(self):
         if self._sock:
