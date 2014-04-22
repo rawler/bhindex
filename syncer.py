@@ -240,6 +240,10 @@ class SyncServer(object):
                 for conn in self.connections.values():
                     try:
                         conn.db_push()
+                    except IOError, e:
+                        logging.debug("Failed to push to %s, disconnecting", conn.peername)
+                        conn.shutdown()
+                        self.connections.pop(conn.peername, None)
                     except Exception:
                         logging.exception("%s push hit error", conn.peername)
                         conn.shutdown()
