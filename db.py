@@ -123,7 +123,7 @@ class Object(object):
 def create_DB(conn):
     with conn:
         conn.executescript("""
-        PRAGMA journal_mode=WAL;
+        PRAGMA journal_mode = WAL;
 
         CREATE TABLE IF NOT EXISTS obj (
             objid INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,7 +148,6 @@ def create_DB(conn):
             FOREIGN KEY (keyid) REFERENCES key (keyid),
             FOREIGN KEY (listid) REFERENCES list (listid)
         );
-        CREATE INDEX IF NOT EXISTS map_key ON map (keyid);
         CREATE INDEX IF NOT EXISTS map_list ON map (listid);
 
         CREATE TABLE IF NOT EXISTS list (
@@ -289,7 +288,7 @@ class DB(object):
         if listid:
             return listid
         newlistid = (self._query_single("SELECT MAX(listid) FROM list") or 0) + 1
-        self.conn.cursor().executemany("INSERT INTO list (listid, value) VALUES (?, ?)", ((newlistid, value) for value in values))
+        self.conn.cursor().executemany("INSERT INTO list (listid, value) VALUES (?, ?)", [(newlistid, value) for value in values])
         return newlistid
 
     def get_mtime(self, objid):
