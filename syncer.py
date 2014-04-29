@@ -191,6 +191,11 @@ class SyncServer(object):
             self.connectAddresses.add(connectAddress)
 
     def _spawn(self, sock, client_addr, connectAddress=None):
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 15)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 5)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+
         with SyncConnection(self._db, self.name, sock) as conn:
             try:
                 logging.debug("Handshaking for sock %s with connectAddress %s", sock, connectAddress or 'Unknown')
