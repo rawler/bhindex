@@ -6,7 +6,9 @@ from ConfigParser import ConfigParser
 import subprocess
 
 from bithorde_eventlet import Client, parseConfig
-from util import cachedAssetLiveChecker, Counter
+from util import cachedAssetLiveChecker, Counter, Progress
+
+import eventlet
 
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
@@ -42,11 +44,10 @@ class Encoder(json.JSONEncoder):
         else:
             return self.default(o)
 
-def main(outfile = None, all_objects = False, all_attributes = False):
+def main(outfile = None, all_objects = False, all_attributes = False, verbose = False):
     DB = db.open(config)
     tmppath = outfile+".tmp"
-    tmpfile = open(tmppath, 'w')
-    count = Counter()
+    exported = Counter()
     storage = Counter()
     encoder = Encoder.configured(all_attributes=all_attributes)
     bithorde = Client(parseConfig(config.items('BITHORDE')))
@@ -54,28 +55,41 @@ def main(outfile = None, all_objects = False, all_attributes = False):
     with open(tmppath, 'w') as tmpfile:
         tmpfile.write('[')
 
-        assets = DB.query({'path': db.ANY, 'name': db.ANY, 'xt': db.ANY})
+        asset_ids = list(DB.query_ids({'path': db.ANY, 'name': db.ANY, 'xt': db.ANY}))
+
+        if verbose:
+            pr = Progress(len(asset_ids))
+        else:
+            pr = None
+
+        assets = (DB[id] for id in asset_ids)
         if all_objects:
             assets = ((a, True) for a in assets)
         else:
             assets = cachedAssetLiveChecker(bithorde, assets, db=DB)
-
         for dbAsset, status_ok in assets:
+            if pr:
+                pr.inc()
             if not status_ok:
                 continue
-            if count.inc() > 1:
+            if exported.inc() > 1:
                 tmpfile.write(',\n')
             json.dump(dbAsset, tmpfile, cls=encoder, indent=2)
-            storage.inc(int(dbAsset['filesize'].any() or 0))
+            filesize = int((('filesize' in dbAsset) and dbAsset['filesize'].any()) or 0)
+            if filesize > (1<<40):
+                print "Warning: %s size of %s" % (dbAsset['xt'].any(), filesize)
+            storage.inc(filesize)
         DB.commit()
 
         tmpfile.write(']')
+        if pr:
+            pr.wait()
 
     if os.path.exists(outfile):
         shutil.copymode(outfile, tmppath)
     os.rename(tmppath, outfile)
 
-    print "Exported %d assets, with %.2fGB worth of data." % (count, storage.inGibi())
+    print "Exported %d assets, with %.2fGB worth of data." % (exported, storage.inGibi())
 
 if __name__=='__main__':
     from optparse import OptionParser
@@ -89,6 +103,9 @@ if __name__=='__main__':
     parser.add_option("-x", "--all-attributes",
                       action="store_true", dest="all_attributes", default=False,
                       help="export all attributes, even @-attributes that are usually local")
+    parser.add_option("-v", "--verbose",
+                      action="store_true", dest="verbose", default=False,
+                      help="print extra info on stdout")
 
     (options, args) = parser.parse_args()
 
@@ -101,4 +118,5 @@ if __name__=='__main__':
         outfile=outfile,
         all_objects=options.all_objects,
         all_attributes=options.all_attributes,
+        verbose=options.verbose,
     )

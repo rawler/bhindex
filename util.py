@@ -1,3 +1,5 @@
+import sys
+
 import eventlet
 from bithorde_eventlet import parseHashIds, message
 from time import time
@@ -56,7 +58,7 @@ def cachedAssetLiveChecker(bithorde, assets, db=None):
                 dbAsset[u'filesize'] = ValueSet((unicode(status.size),), t=t)
             if db:
                 db.update(dbAsset)
-                commit_pending.schedule(0.3)
+                commit_pending.schedule(2)
 
             return dbAsset, status_ok
 
@@ -79,4 +81,28 @@ class Counter(object):
     def inGibi(self):
         return self.i / (1024*1024*1024.0)
 
+class Progress(Counter):
+    def __init__(self, total, unit=''):
+        Counter.__init__(self)
+        self.total = total
+        self.printer = eventlet.spawn(self.run)
+        self.unit = unit
+
+    def run(self):
+        start_time = last_time = time()
+        last_processed = int(self)
+        while int(self) < self.total:
+            eventlet.sleep(1)
+            current_time = time()
+            time_diff = time()-last_time
+            processed_diff = int(self) - last_processed
+            print "\rProcessed: %d/%d%s (%d/sec)" % (self, self.total, self.unit, processed_diff/time_diff),
+            sys.stdout.flush()
+            last_time = current_time
+            last_processed = int(self)
+        time_diff = time()-start_time
+        print "\rProcessed: %d/%d%s (%d/sec)" % (self, self.total, self.unit, self.total/time_diff)
+
+    def wait(self):
+        return self.printer.wait()
 
