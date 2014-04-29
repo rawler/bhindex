@@ -185,7 +185,7 @@ class SyncServer(object):
             return conn
 
     def _disconnectPeer(self, conn):
-        logging.debug("DROPPED %s", self.connections.pop(conn.peername, None) or 'NONE')
+        self.connections.pop(conn.peername, None)
         connectAddress = getattr(conn, 'connectAddress', None)
         if connectAddress:
             self.connectAddresses.add(connectAddress)
@@ -240,14 +240,13 @@ class SyncServer(object):
                 for conn in self.connections.values():
                     try:
                         conn.db_push()
-                    except IOError, e:
+                    except IOError:
                         logging.debug("Failed to push to %s, disconnecting", conn.peername)
-                        conn.shutdown()
                         self.connections.pop(conn.peername, None)
                     except Exception:
                         logging.exception("%s push hit error", conn.peername)
-                        conn.shutdown()
                         self.connections.pop(conn.peername, None)
+                        conn.shutdown()
             eventlet.greenthread.sleep(0.5)
 
     def wait(self):
