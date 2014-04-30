@@ -168,8 +168,6 @@ class SyncServer(object):
         self._pusher = eventlet.spawn(self._db_push)
         self._connector = eventlet.spawn(self._connector)
 
-        self._handshakefail = 0
-
     def _connectPeer(self, conn, connectAddress=None):
         peername = conn.peername
         connected = self.connections.get(peername, None)
@@ -201,11 +199,11 @@ class SyncServer(object):
                 logging.debug("Handshaking for sock %s with connectAddress %s", sock, connectAddress or 'Unknown')
                 with self._db.transaction():
                     conn.handshake()
+            except StopIteration:
+                logging.debug("Handshake ended prematurely for %s with connectAddress %s", sock, connectAddress or 'Unknown')
+                return
             except Exception:
                 logging.exception("Handshake failed for sock %s with connectAddress %s", sock, connectAddress or 'Unknown')
-                self._handshakefail += 1
-                if self._handshakefail >= 5:
-                    sys.exit()
                 return
 
             peername = conn.peername
