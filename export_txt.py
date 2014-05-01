@@ -23,6 +23,16 @@ def list_db(db):
         yield asset, {bithorde.message.TREE_TIGER: tigerhash}
 
 class Encoder(json.JSONEncoder):
+    def __init__(self, all_attributes=False, *args, **kwargs):
+        self.all_attributes = all_attributes
+        json.JSONEncoder.__init__(self, *args, **kwargs)
+
+    @classmethod
+    def configured(cls, all_attributes = False):
+        def _res(*args, **kwargs):
+            return cls(*args, all_attributes=all_attributes, **kwargs)
+        return _res
+
     def default(self, o):
         if isinstance(o, db.ValueSet):
             return {'_type': 'db.ValueSet',
@@ -30,40 +40,74 @@ class Encoder(json.JSONEncoder):
                     'values': list(o)}
         if isinstance(o, db.Object):
             x = {'_type': 'db.Object'}
-            x.update((k,v) for k,v in o._dict.iteritems() if not k[0] == '@')
+            items = o._dict.iteritems()
+            if not self.all_attributes:
+                items = [(k,v) for k,v in items if not k[0] == '@']
+            x.update(items)
             return x
         else:
             return self.default(o)
 
-def main():
+def main(outfile = None, all_objects = False, all_attributes = False):
     DB = db.open(config)
-    tmppath = TXTPATH+".tmp"
-    outfile = open(tmppath, 'w')
+    tmppath = outfile+".tmp"
+    tmpfile = open(tmppath, 'w')
     count = util.Counter()
     storage = util.Counter()
+    encoder = Encoder.configured(all_attributes=all_attributes)
+
+    def writeOut(db_asset):
+        if int(count):
+            tmpfile.write(',\n')
+        count.inc()
+        json.dump(db_asset, tmpfile, cls=encoder, indent=2)
 
     def onStatusUpdate(asset, status, db_asset):
         if status.status == bithorde.message.SUCCESS:
-            if int(count):
-                outfile.write(',\n')
-            count.inc()
             storage.inc(status.size)
-            json.dump(db_asset, outfile, cls=Encoder, indent=2)
+            writeOut(db_asset)
 
-    outfile.write('[')
+    tmpfile.write('[')
 
-    client = bithorde.BitHordeIteratorClient(list_db(DB), onStatusUpdate)
-    bithorde.connect(ADDRESS, client)
-    bithorde.reactor.run()
+    if all_objects:
+        for db_asset, _ in list_db(DB):
+            writeOut(db_asset)
+    else:
+        client = bithorde.BitHordeIteratorClient(list_db(DB), onStatusUpdate)
+        bithorde.connect(ADDRESS, client)
+        bithorde.reactor.run()
 
-    outfile.write(']')
-    outfile.close()
+    tmpfile.write(']')
+    tmpfile.close()
 
-    if os.path.exists(TXTPATH):
-        shutil.copymode(TXTPATH, tmppath)
-    os.rename(tmppath, TXTPATH)
+    if os.path.exists(outfile):
+        shutil.copymode(outfile, tmppath)
+    os.rename(tmppath, outfile)
 
     print "Exported %d assets, with %.2fGB worth of data." % (count, storage.inGibi())
 
 if __name__=='__main__':
-    main()
+    from optparse import OptionParser
+
+    usage = """usage: %prog [options] [outfile] ...
+'outfile' will be read from config, unless provided """
+    parser = OptionParser(usage=usage)
+    parser.add_option("-a", "--all-objects",
+                      action="store_true", dest="all_objects", default=False,
+                      help="export all objects without checking bithorde for availability")
+    parser.add_option("-x", "--all-attributes",
+                      action="store_true", dest="all_attributes", default=False,
+                      help="export all attributes, even @-attributes that are usually local")
+
+    (options, args) = parser.parse_args()
+
+    if len(args):
+        outfile = args[0]
+    else:
+        outfile = TXTPATH
+
+    main(
+        outfile=outfile,
+        all_objects=options.all_objects,
+        all_attributes=options.all_attributes,
+    )
