@@ -31,11 +31,11 @@ def cachedAssetLiveChecker(bithorde, assets, db=None):
         with bithorde.open(ids) as bhAsset:
             status = bhAsset.status()
             status_ok = status.status == message.SUCCESS
+            dbAsset[u'bh_status'] = ValueSet((unicode(status_ok),), t=t)
+            dbAsset[u'bh_status_confirmed'] = ValueSet((unicode(t),), t=t)
+            if status.size is not None:
+                dbAsset[u'filesize'] = ValueSet((unicode(status.size),), t=t)
             if db:
-                dbAsset[u'bh_status'] = ValueSet((unicode(status_ok),), t=t)
-                dbAsset[u'bh_status_confirmed'] = ValueSet((unicode(t),), t=t)
-                if status.size is not None:
-                    dbAsset[u'filesize'] = ValueSet((unicode(status.size),), t=t)
                 db.update(dbAsset)
             return dbAsset, status_ok
 
@@ -45,10 +45,12 @@ class Counter(object):
     def __init__(self):
         self.i = 0
 
+    def reset(self):
+        self.i = 0
+
     def inc(self, i = 1):
-        res = self.i
         self.i += i
-        return res
+        return self.i
 
     def __int__(self):
         return self.i

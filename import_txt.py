@@ -5,26 +5,16 @@ import codecs, os, os.path as path, sys, json, urllib2
 from ConfigParser import ConfigParser
 from time import time
 
-import bithorde
+from bithorde_eventlet import Client, parseConfig
+from util import cachedAssetLiveChecker, Counter
 
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config, magnet, scraper, util
+import db, config, scraper
 config = config.read()
 
 LINKDIR = config.get('LINKSEXPORT', 'linksdir')
-ADDRESS = config.get('BITHORDE', 'address')
-
-def readMagnetAssets(input, all_attributes = False):
-    t = None
-    for line in input:
-        if line.startswith('magnet:'):
-            asset = magnet.objectFromMagnet(line.strip().decode('utf8'), t)
-            if asset:
-                assert asset.id.startswith(magnet.XT_PREFIX_TIGER)
-                tigerhash = bithorde.b32decode(asset.id[len(magnet.XT_PREFIX_TIGER):])
-                yield asset, {bithorde.message.TREE_TIGER: tigerhash}
 
 def readJSON(input, all_attributes = False):
     def obj_hook(d):
@@ -44,70 +34,49 @@ def readJSON(input, all_attributes = False):
         else:
             return d
 
-    for asset in json.load(input, object_hook=obj_hook):
-        if not asset.id.startswith(magnet.XT_PREFIX_TIGER):
-            print "Warn: asset with strange id: ", asset
-            continue
-        tigerhash = bithorde.b32decode(asset.id[len(magnet.XT_PREFIX_TIGER):])
-        yield asset, {bithorde.message.TREE_TIGER: tigerhash}
+    return json.load(input, object_hook=obj_hook)
 
-STATUS = bithorde.message._STATUS
-class ImportSession(object):
-    def __init__(self, db, imports, do_scrape, all_objects, all_attributes):
-        self.do_scrape = do_scrape
-        self.all_objects = all_objects
-        self.all_attributes = all_attributes
-        self.imports = imports
-        self.db = db
-        self.count = util.Counter()
-        self.storage = util.Counter()
-        self.dirty = 0
+def runImport(db, imports, do_scrape, all_objects, all_attributes):
+    count = Counter()
+    storage = Counter()
+    dirty = Counter()
+    bithorde = Client(parseConfig(config.items('BITHORDE')))
 
-    def assets(self):
-        FORMATS = {
-            'magnetlist': readMagnetAssets,
-            'json': readJSON,
-        }
-        unireader = codecs.getreader('utf-8')
-        for format,url in self.imports:
-            formatParser = FORMATS[format]
-            try:
-                input = unireader(urllib2.urlopen(url))
-                for asset, hash in formatParser(input, all_attributes=self.all_attributes):
-                    yield asset, hash
-                input.close()
-            except urllib2.URLError:
-                print "Failure on '%s'" % url
-
-    def write_asset(self, db_asset):
-        self.count.inc()
-        if self.do_scrape:
-            scraper.scrape_for(db_asset)
-        self.db.update(db_asset)
-        self.dirty += 1
-        if self.dirty >= 500:
-            self.db.commit()
-            self.dirty = 0
-
-    def onStatusUpdate(self, asset, status, db_asset):
-        print u"%s: %s" % (STATUS.values_by_number[status.status].name, u','.join(db_asset['name']))
-        if status.status == bithorde.message.SUCCESS:
-            self.storage.inc(status.size)
-            self.write_asset(db_asset)
-
-    def run(self):
-        if self.all_objects:
-            for db_asset, _ in self.assets():
-                print db_asset.id
-                self.write_asset(db_asset)
+    def importFromSource(url):
+        input = unireader(urllib2.urlopen(url))
+        assets = readJSON(input, all_attributes=all_attributes)
+        if all_objects:
+            assets = [(a, True) for a in assets]
         else:
-            client = bithorde.BitHordeIteratorClient(self.assets(), self.onStatusUpdate, timeout=config.getint('TXTSYNC', 'asset_import_timeout'))
-            bithorde.connect(ADDRESS, client)
-            bithorde.reactor.run()
+            assets = cachedAssetLiveChecker(bithorde, assets)
+        for db_asset, status_ok in assets:
+            asset_name = u','.join(db_asset['name'])
+            if status_ok:
+                print u"SUCCESS: %s" % asset_name
+                count.inc()
+                storage.inc(int((('filesize' in db_asset) and db_asset['filesize'].any()) or 0))
+                if do_scrape:
+                    scraper.scrape_for(db_asset)
+                db.update(db_asset)
+                if dirty.inc() > 500:
+                    db.commit()
+                    dirty.reset()
+            else:
+                print u"NOTFOUND: %s" % asset_name
+        input.close()
 
-        self.db.vacuum()
-        self.db.commit()
-        return self
+    unireader = codecs.getreader('utf-8')
+    for format,url in imports:
+        if format != 'json':
+            raise "Unsupported Format"
+        try:
+            importFromSource(url)
+        except urllib2.URLError:
+            print "Failure on '%s'" % url
+    db.vacuum()
+    db.commit()
+
+    print "Imported %d assets, with %.2fGB worth of data." % (count, storage.inGibi())
 
 if __name__ == '__main__':
     import cliopt
@@ -129,13 +98,12 @@ where <format> is either 'json' or 'magnetlist'"""
     DB = db.open(config)
 
     if args:
-        assets = (x.split(':',1) for x in args)
+        imports = (x.split(':',1) for x in args)
     else:
-        assets = ((config.get('txt_'+imp, 'format'), config.get('txt_'+imp, 'url'))
+        imports = ((config.get('txt_'+imp, 'format'), config.get('txt_'+imp, 'url'))
                   for imp in config.get('TXTSYNC', 'imports').split(','))
-    sess = ImportSession(DB, assets,
+    runImport(DB, imports,
         do_scrape=options.scrape,
         all_objects=options.all_objects,
         all_attributes=options.all_attributes,
-    ).run()
-    print "Imported %d assets, with %.2fGB worth of data." % (sess.count, sess.storage.inGibi())
+    )

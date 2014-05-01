@@ -46,8 +46,8 @@ def main(outfile = None, all_objects = False, all_attributes = False):
     DB = db.open(config)
     tmppath = outfile+".tmp"
     tmpfile = open(tmppath, 'w')
-    count = util.Counter()
-    storage = util.Counter()
+    count = Counter()
+    storage = Counter()
     encoder = Encoder.configured(all_attributes=all_attributes)
     bithorde = Client(parseConfig(config.items('BITHORDE')))
 
