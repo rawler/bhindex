@@ -202,6 +202,7 @@ class DB(object):
 
     def __init__(self, config):
         self.conn = sqlite3.connect(config.get('DB', 'file'), timeout=60)
+        self.cursor = self.conn.cursor()
         create_DB(self.conn)
         self.__idCache = dict()
 
@@ -214,7 +215,7 @@ class DB(object):
         return c.fetchall()
 
     def _query_first(self, query, args):
-        c = self.conn.cursor()
+        c = self.cursor
         c.execute(query, args)
         return c.fetchone()
 
@@ -226,17 +227,19 @@ class DB(object):
             return default
 
     def _getId(self, tbl, id):
+        objid = self._query_single("SELECT %sid FROM %s WHERE %s = ?" % (tbl, tbl, tbl), (id,))
+        if not objid:
+            self.cursor.execute("INSERT OR IGNORE INTO %s (%s) VALUES (?)" % (tbl, tbl), (id,))
+            objid = self._query_single("SELECT %sid FROM %s WHERE %s = ?" % (tbl, tbl, tbl), (id,))
+        return objid
+
+    def _getCachedId(self, tbl, id):
         try:
             return self.__idCache[(tbl, id)]
         except KeyError:
-            params = locals()
-            objid = self._query_single("SELECT %(tbl)sid FROM %(tbl)s WHERE %(tbl)s = ?" % params, (id,))
-            if not objid:
-                cursor = self.conn.cursor()
-                cursor.execute("INSERT OR IGNORE INTO %(tbl)s (%(tbl)s) VALUES (?)" % params, (id,))
-                objid = cursor.lastrowid
-            self.__idCache[(tbl, id)] = objid
-            return objid
+            id = self._getId(tbl, id)
+            self.__idCache[(tbl, id)] = id
+            return id
 
     def __getitem__(self, objid):
         obj = Object(objid)
@@ -255,7 +258,7 @@ class DB(object):
 
     def update_attr(self, objid, key, values):
         objid = self._getId('obj', objid)
-        keyid = self._getId('key', key)
+        keyid = self._getCachedId('key', key)
         tstamp = self._query_single("SELECT timestamp FROM map WHERE objid = ? AND keyid = ?", (objid, keyid))
         if values.t > tstamp:
             newlistid = self.insert_list(values)
@@ -345,7 +348,7 @@ class DB(object):
         cursor = self.conn.cursor()
         for key in obj._dirty:
             values = _dict[key]
-            keyid = self._getId('key', key)
+            keyid = self._getCachedId('key', key)
             old_timestamp = self._query_single("SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
             if not old_timestamp or values.t > old_timestamp:
                 listid = self.insert_list(values)
