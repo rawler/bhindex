@@ -132,6 +132,8 @@ class Client:
         for msg in self._connection:
             if isinstance(msg, message.AssetStatus):
                 self._processStatus(msg)
+            elif isinstance(msg, message.Ping):
+                self._connection.send(message.Ping())
             else:
                 print "Unhandled message: ", type(msg), msg
 
