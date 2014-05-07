@@ -40,6 +40,7 @@ def cachedAssetLiveChecker(bithorde, assets, db=None):
     def checkAsset(dbAsset):
         dbStatus = hasValidStatus(dbAsset)
         if dbStatus:
+            eventlet.sleep()
             return dbAsset, bool(dbStatus.any())
 
         ids = parseHashIds(dbAsset['xt'])
