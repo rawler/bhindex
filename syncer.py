@@ -14,7 +14,7 @@ FIELD_MAP=sync_pb2._STREAM.fields_by_name
 
 from datetime import datetime
 
-FORMAT = "%(levelname)-8s %(asctime)-15s %(message)s"
+FORMAT = "%(levelname)-8s %(asctime)-15s %(name)s %(message)s"
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
 class SyncConnection(object):
@@ -24,6 +24,7 @@ class SyncConnection(object):
         self.name = name
         self._buf = ''
         self._echo_prevention = set()
+        self._log = logging.getLogger('[anon]')
 
         self.peername = None
         self._last_serial_received = 0
@@ -45,19 +46,21 @@ class SyncConnection(object):
             last_serial_in_db=self._db.last_serial(),
         )])
 
+        self._log = logging.getLogger(self.peername)
+
         peersetup = self.read_msg()
         if peersetup.last_serial_received <= self._db.last_serial():
             self._last_serial_sent = peersetup.last_serial_received
         else:
-            logging.warn("detecting local db was reset")
+            self._log.warn("detecting local db was reset")
             self._last_serial_sent = 0
 
         if peersetup.last_serial_in_db < self._last_serial_received:
-            logging.warn("detecting remote db was reset")
+            self._log.warn("detecting remote db was reset")
             self._last_serial_received = 0
 
-        logging.info("%s is requesting from my #%d (is %d behind) ", self.peername, self._last_serial_sent, self._db.last_serial() - self._last_serial_sent)
-        logging.info("%s is currently at #%d (I'm %d behind)", self.peername, peersetup.last_serial_in_db, peersetup.last_serial_in_db - self._last_serial_received)
+        self._log.info("%s is requesting from my #%d (is %d behind) ", self.peername, self._last_serial_sent, self._db.last_serial() - self._last_serial_sent)
+        self._log.info("%s is currently at #%d (I'm %d behind)", self.peername, peersetup.last_serial_in_db, peersetup.last_serial_in_db - self._last_serial_received)
 
         return self
 
@@ -129,9 +132,9 @@ class SyncConnection(object):
                 raise "Unknown message"
 
         if chunk_had:
-            logging.debug("Commit %d/%d", chunk_applied, chunk_had)
+            self._log.debug("Commit %d/%d", chunk_applied, chunk_had)
         if self._last_serial_received != last_serial:
-            logging.debug("Checkpoint %d", last_serial)
+            self._log.debug("Checkpoint %d", last_serial)
             self._last_serial_received = last_serial
             self._db.set_sync_state(self.peername, last_received=self._last_serial_received)
 
