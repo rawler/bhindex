@@ -70,12 +70,13 @@ def main(force_all=False, prefixes=[]):
             if prefixes and not path_in_prefixes(p, prefixes):
                 success = False
                 continue
-            dst = path.normpath(path.join(LINKDIR, p))
-            if not dst.startswith(LINKDIR):
-                print "Warning! %s tries to break out of directory!" % dst
-                continue
 
             tgt = path.join(BHFUSEDIR, magnet.fromDbObject(asset))
+            dst = path.normpath(path.join(LINKDIR, p))
+            if (not dst.startswith(LINKDIR)) or len(dst) <= len(LINKDIR):
+                print "Warning! %s (%s) tries to break out of directory!" % (dst, tgt)
+                continue
+
             print u"Linking %s -> %s" % (dst, tgt)
             if not link(dst, tgt):
                 success = False
