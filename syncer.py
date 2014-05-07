@@ -269,12 +269,23 @@ def parse_addr(addr):
     else:
         return addr[0]
 
-config = config.read()
-sync_config = config.items('LIVESYNC')
-sync_config = {
-    'name': sync_config['name'],
-    'port': int(sync_config['port']),
-    'connectAddresses': set(parse_addr(addr) for addr in sync_config['connect'].split(",")),
-    'db_poll_interval': float(sync_config['db_poll_interval']),
-}
-SyncServer(db=db.open(config), **sync_config).wait()
+if __name__ == '__main__':
+    import cliopt
+
+    usage = """usage: %prog [options] [<format>:<url>] ...
+    where <format> is either 'json' or 'magnetlist'"""
+    parser = cliopt.OptionParser(usage=usage)
+    parser.add_option("-s", "--no-sync", action="store_false", dest="sync", default=True,
+                      help="Improve I/O write-performance at expense of durability. Might be worth it during initial sync.")
+
+    (options, args) = parser.parse_args()
+
+    config = config.read()
+    sync_config = config.items('LIVESYNC')
+    sync_config = {
+        'name': sync_config['name'],
+        'port': int(sync_config['port']),
+        'connectAddresses': set(parse_addr(addr) for addr in sync_config['connect'].split(",")),
+        'db_poll_interval': float(sync_config['db_poll_interval']),
+    }
+    SyncServer(db=db.open(config, sync=options.sync), **sync_config).wait()

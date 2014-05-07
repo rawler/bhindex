@@ -200,8 +200,9 @@ class DB(object):
     ANY = ANY
     Starts = Starts
 
-    def __init__(self, config):
-        self.conn = sqlite3.connect(config.get('DB', 'file'), timeout=60)
+    def __init__(self, config, sync=True):
+        self.conn = sqlite3.connect(config.get('DB', 'file'), timeout=60, isolation_level='DEFERRED')
+        self.conn.execute("PRAGMA synchronous = %s" % (sync and 'NORMAL' or 'OFF'))
         self.cursor = self.conn.cursor()
         create_DB(self.conn)
         self.__idCache = dict()
@@ -385,8 +386,8 @@ class DB(object):
     def set_sync_state(self, peername, last_received):
         self.conn.cursor().execute("INSERT OR REPLACE INTO sync_state (peername, last_received) VALUES (?, ?)", (peername, last_received))
 
-def open(config):
-    return DB(config)
+def open(config, sync=True):
+    return DB(config, sync=sync)
 
 if __name__ == '__main__':
     import config
