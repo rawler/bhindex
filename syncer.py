@@ -76,7 +76,12 @@ class SyncConnection(object):
         self._sock and self._sock.sendall(buf.getvalue())
 
     def _fill_buf(self):
-        res = self._sock and self._sock.recv(64*1024)
+        try:
+            res = self._sock and self._sock.recv(64*1024)
+        except IOError, e:
+            self._log.info("Failed to receive: errno: %s (%s)", e.errno, e.strerror)
+            self.close()
+            raise StopIteration
         if not res:
             self.close()
             raise StopIteration
