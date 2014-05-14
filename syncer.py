@@ -14,7 +14,7 @@ FIELD_MAP=sync_pb2._STREAM.fields_by_name
 
 from datetime import datetime
 
-FORMAT = "%(levelname)-8s %(asctime)-15s %(name)s %(message)s"
+FORMAT = "%(levelname)-8s %(asctime)-15s <%(name)s> %(message)s"
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
 class SyncConnection(object):
