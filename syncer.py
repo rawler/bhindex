@@ -7,11 +7,15 @@ from cStringIO import StringIO
 import eventlet
 from eventlet.green import socket
 from google.protobuf.message import Message
-from google.protobuf.internal import encoder
+from google.protobuf.internal.encoder import MessageEncoder
 
 from bithorde.protocol import decodeMessage
 
-FIELD_MAP=sync_pb2._STREAM.fields_by_name
+MSG_ENCODERS = dict(
+    (name, MessageEncoder(field.number, False, False))
+    for name, field
+    in sync_pb2._STREAM.fields_by_name.iteritems()
+)
 
 from datetime import datetime
 
@@ -68,7 +72,7 @@ class SyncConnection(object):
     def _sendmsg(self, *msg_groups):
         buf = StringIO()
         for field, msg in msg_groups:
-            enc = encoder.MessageEncoder(FIELD_MAP[field].number, False, False)
+            enc = MSG_ENCODERS[field]
             if hasattr(msg, '__iter__'):
                 for msg in msg:
                     enc(buf.write, msg)
