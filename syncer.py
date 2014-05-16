@@ -9,7 +9,7 @@ from eventlet.green import socket
 from google.protobuf.message import Message
 from google.protobuf.internal import encoder
 
-from bithorde.bithorde import decodeMessage
+from bithorde.protocol import decodeMessage
 
 FIELD_MAP=sync_pb2._STREAM.fields_by_name
 

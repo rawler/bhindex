@@ -5,7 +5,7 @@ from cStringIO import StringIO
 from collections import deque
 from base64 import b32decode
 
-from .bithorde import decodeMessage, encoder, MSG_REV_MAP, message
+from .protocol import decodeMessage, encodeMessage, message
 
 import eventlet
 
@@ -31,10 +31,8 @@ class Connection:
         self._socket = eventlet.connect(tgt, family)
 
     def send(self, msg):
-        buf = StringIO()
-        enc = encoder.MessageEncoder(MSG_REV_MAP[type(msg)], False, False)
-        enc(buf.write, msg)
-        self._socket.send(buf.getvalue())
+        msgbuf = encodeMessage(msg)
+        self._socket.send(msgbuf)
 
     def close(self):
         self._socket.close()
