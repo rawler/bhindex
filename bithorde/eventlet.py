@@ -3,7 +3,6 @@ from __future__ import  absolute_import
 import socket, re
 from cStringIO import StringIO
 from collections import deque
-from base64 import b32decode
 
 from .protocol import decodeMessage, encodeMessage, message
 
@@ -154,24 +153,6 @@ class Client:
             else:
                 del self._assets[handle]
                 self._handleAllocator.free(handle)
-
-tiger_hash = re.compile(r'tiger:(\w{39})')
-def parseHashIds(ids):
-    if not hasattr(ids, '__iter__'):
-        ids = (ids,)
-
-    res = list()
-    for id in ids:
-        m = tiger_hash.search(id)
-        if m:
-            try:
-                id = b32decode(m.group(1)+'=')
-                res.append(message.Identifier(type=message.TREE_TIGER, id=id))
-            except TypeError:
-                pass
-        else:
-            pass
-    return res
 
 def parseConfig(c):
     return dict(

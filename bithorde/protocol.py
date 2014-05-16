@@ -49,8 +49,3 @@ def encodeMessage(msg, msgtype=None, msg_map=MSG_TYPE_MAP):
     enc = encoder.MessageEncoder(msgtype, False, False)
     enc(buf.write, msg)
     return buf.getvalue()
-
-def b32decode(string):
-    l = len(string)
-    string = string + "="*(7-((l-1)%8)) # Pad with = for b32decodes:s pleasure
-    return _b32decode(string, True)
