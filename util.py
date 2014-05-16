@@ -22,7 +22,8 @@ ASSET_WAIT_FACTOR = 0.01
 def cachedAssetLiveChecker(bithorde, assets, db=None):
     t = time()
     dirty = Counter()
-    commit_pending = DelayedAction(db.commit)
+    if db:
+        commit_pending = DelayedAction(db.commit)
 
     def hasValidStatus(dbAsset):
         try:
