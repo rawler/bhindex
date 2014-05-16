@@ -5,7 +5,7 @@ import os, os.path as path, shutil, sys, json
 from ConfigParser import ConfigParser
 import subprocess
 
-from bithorde_eventlet import Client, parseConfig
+from bithorde.eventlet import Client, parseConfig
 from util import cachedAssetLiveChecker, Counter, Progress
 
 import eventlet

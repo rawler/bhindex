@@ -7,8 +7,9 @@ from cStringIO import StringIO
 import eventlet
 from eventlet.green import socket
 from google.protobuf.message import Message
+from google.protobuf.internal import encoder
 
-from pyhorde.bithorde import encoder, decodeMessage
+from bithorde.bithorde import decodeMessage
 
 FIELD_MAP=sync_pb2._STREAM.fields_by_name
 

@@ -6,7 +6,7 @@
 
 # Default db-name and my.config
 /bhindex.db
-/bhindex.sqlite
+/bhindex.sqlite*
 /my.config
 
 # Ignore test-directory for links

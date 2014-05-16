@@ -1,9 +1,11 @@
+from __future__ import  absolute_import
+
 import socket, re
 from cStringIO import StringIO
 from collections import deque
 from base64 import b32decode
 
-from pyhorde.bithorde import decodeMessage, encoder, MSG_REV_MAP, message
+from .bithorde import decodeMessage, encoder, MSG_REV_MAP, message
 
 import eventlet
 

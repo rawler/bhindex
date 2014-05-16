@@ -1,7 +1,7 @@
 import sys
 
 import eventlet
-from bithorde_eventlet import parseHashIds, message
+from bithorde.eventlet import parseHashIds, message
 from time import time
 from db import ValueSet
 
