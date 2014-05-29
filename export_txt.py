@@ -44,7 +44,7 @@ class Encoder(json.JSONEncoder):
         else:
             return self.default(o)
 
-def main(outfile = None, all_objects = False, all_attributes = False, verbose = False):
+def main(outfile = TXTPATH, all_objects = False, all_attributes = False, verbose = False):
     DB = db.open(config)
     tmppath = outfile+".tmp"
     exported = Counter()
