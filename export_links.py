@@ -4,7 +4,7 @@
 import os, os.path as path, sys
 from ConfigParser import ConfigParser
 from optparse import OptionParser
-import subprocess
+import stat, subprocess
 from time import time
 
 from bithorde.eventlet import Client, parseConfig
@@ -18,6 +18,7 @@ config = config.read()
 
 LINKDIR = path.normpath(config.get('LINKSEXPORT', 'linksdir'))
 BHFUSEDIR = config.get('BITHORDE', 'fusedir')
+DEFAULT_DIR_PERM = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
 
 def link(linkpath, tgt):
     try:            oldtgt = os.readlink(linkpath)
@@ -34,7 +35,7 @@ def link(linkpath, tgt):
 
     dstdir = path.dirname(linkpath)
     if not path.exists(dstdir):
-        try: os.makedirs(dstdir)
+        try: os.makedirs(dstdir, DEFAULT_DIR_PERM)
         except OSError as e:
             print "Failed to create directory %s:" % dstdir
             print "  ", e
