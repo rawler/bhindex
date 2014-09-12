@@ -1,12 +1,14 @@
 from __future__ import  absolute_import
 
-import socket, re
+import socket, re, logging
 from cStringIO import StringIO
 from collections import deque
 
 from .protocol import decodeMessage, encodeMessage, message
 
 import eventlet
+
+logger = logging.getLogger(__name__)
 
 class Connection:
     def __init__(self, tgt, name=None):
@@ -50,9 +52,10 @@ class Connection:
 
     def _read(self):
         new = self._socket.recv(128*1024)
-        if not new:
+        if new:
+            return new
+        else:
             raise StopIteration
-        return new
 
     def auth(self, name):
         self.send(message.HandShake(name=name, protoversion=2))
@@ -113,6 +116,9 @@ class Client:
         self._connection = Connection(config['address'], config.get('myname', 'bhindex'))
         self._reader = eventlet.spawn(self._reader)
 
+    def __repr__(self):
+        return "Client(peername=%s)" % self._connection.peername
+
     def open(self, hashIds):
         handle = self._handleAllocator.alloc()
         asset = Asset(self, handle)
@@ -148,8 +154,7 @@ class Client:
             asset._processStatus(status)
         else:
             if status.ids or status.status == message.SUCCESS:
-                # print "Ignoring late " + message._STATUS.values_by_number[status.status].name + " response on closing asset"
-                pass
+                logger.debug("Ignoring late %s response on closing asset", message._STATUS.values_by_number[status.status].name)
             else:
                 del self._assets[handle]
                 self._handleAllocator.free(handle)
