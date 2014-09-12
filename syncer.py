@@ -301,4 +301,4 @@ if __name__ == '__main__':
         'connectAddresses': set(parse_addr(addr) for addr in sync_config['connect'].split(",")),
         'db_poll_interval': float(sync_config['db_poll_interval']),
     }
-    SyncServer(db=db.open(config, sync=options.sync), **sync_config).wait()
+    SyncServer(db=db.open(config.get('DB', 'file'), sync=options.sync), **sync_config).wait()

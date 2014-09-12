@@ -57,7 +57,7 @@ def path_in_prefixes(path, prefixes):
     return False
 
 def main(force_all=False, prefixes=[]):
-    DB = db.open(config)
+    DB = db.open(config.get('DB', 'file'))
     bithorde = Client(parseConfig(config.items('BITHORDE')))
 
     t = time()

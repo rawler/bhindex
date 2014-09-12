@@ -33,7 +33,7 @@ if __name__=='__main__':
     else:
         path=[]
 
-    thisdb = db.open(config)
+    thisdb = db.open(config.get('DB', 'file'))
 
     QtGui.QApplication.setGraphicsSystem('raster')
     app = QtGui.QApplication(sys.argv)

@@ -95,7 +95,7 @@ where <format> is either 'json' or 'magnetlist'"""
 
     (options, args) = parser.parse_args()
 
-    DB = db.open(config)
+    DB = db.open(config.get('DB', 'file'))
 
     if args:
         imports = (x.split(':',1) for x in args)

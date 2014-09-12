@@ -1,173 +1,13 @@
-# -*- coding: utf-8 -*-
-from urlparse import urlparse, parse_qs
-from urllib import quote_plus as urlquote
-import cPickle as pickle
-import hashlib, struct
 from time import time
-
-import bithorde
 
 import sqlite3
 
-def path_str2lst(str):
-    return [x for x in str.split("/") if x]
-
-def path_lst2str(list):
-    return "/".join(list)
+from obj import Object, ValueSet
+from setup import create_DB
 
 ANY = object()
 class Starts(unicode):
     pass
-
-class ValueSet(set):
-    def __init__(self, v, t=None):
-        if isinstance(v, unicode):
-            set.__init__(self, [v])
-        else:
-            set.__init__(self, v)
-            for x in self:
-                assert isinstance(x, unicode)
-        if not t:
-            t = time()
-        self.t = t
-
-    def update(self, v, t=None):
-        if not t:
-            t = time()
-        self.t = max([t, self.t])
-        set.update(self, v)
-
-    def any(self):
-        for x in self:
-            return x
-
-    def join(self, sep=u', '):
-        return unicode(sep).join(self)
-    __unicode__ = __str__ = join
-
-class Object(object):
-    def __init__(self, objid, init={}):
-        self.id = objid
-        self._dirty = set()
-        self._dict = dict()
-        self.update(init)
-
-    def update(self, other):
-        for k,v in other.iteritems():
-            self[k] = v
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def get(self, key, default=None):
-        return self._dict.get(key, default)
-
-    def any(self, key, default=None):
-        values = self._dict.get(key)
-        return values and values.any() or default
-
-    def __contains__(self, key):
-        return key in self._dict
-
-    def __setitem__(self, key, value):
-        assert isinstance(key, unicode)
-        assert isinstance(value, ValueSet)
-
-        key = key.lower()
-        if key not in self._dict or (self._dict[key] != value and value.t >= self._dict[key].t):
-            self._dirty.add(key)
-            self._dict[key] = value
-
-    def __delitem__(self, key):
-        assert isinstance(key, unicode)
-
-        if key in self._dict:
-            self._dirty.add(key)
-            self._dict[key].clear()
-            self._dict[key].t = time()
-
-    def iteritems(self):
-        return self._dict.iteritems()
-
-    def matches(self, criteria):
-        for key, value in criteria.iteritems():
-            if key not in self._dict:
-                return False
-            if value not in (None, ANY) and value not in self._dict[key]:
-                return False
-        return True
-
-    def update_key(self, key, values, t=None):
-        if not t:
-            t=time()
-        if isinstance(values, unicode):
-            values = set([values])
-
-        # Try to prune upcased properties
-        lkey = key.lower()
-        if lkey != key:
-            del self[key]
-            key = lkey
-
-        if key in self:
-            self[key].update(values, t)
-            self._dirty.add(key)
-        else:
-            self[key] = ValueSet(values, t)
-
-    def timestamp(self):
-        return max(x.t for x in self._dict.itervalues())
-
-    def __repr__(self):
-        return repr(self._dict)
-
-    def __unicode__(self):
-        return u"db.Object {\n%s\n}" % u'\n'.join(u" %s: %s" % x for x in self.iteritems())
-
-def create_DB(conn):
-    with conn:
-        conn.executescript("""
-        PRAGMA journal_mode = WAL;
-
-        CREATE TABLE IF NOT EXISTS obj (
-            objid INTEGER PRIMARY KEY AUTOINCREMENT,
-            obj TEXT UNIQUE NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS obj_obj ON obj (obj);
-
-        CREATE TABLE IF NOT EXISTS key (
-            keyid INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT UNIQUE NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS key_key ON key (key);
-
-        CREATE TABLE IF NOT EXISTS map (
-            serial INTEGER NOT NULL PRIMARY KEY,
-            objid INTEGER NOT NULL,
-            keyid INTEGER NOT NULL,
-            timestamp INTEGER NOT NULL,
-            listid INTEGER,
-            UNIQUE (objid, keyid),
-            FOREIGN KEY (objid) REFERENCES obj (objid),
-            FOREIGN KEY (keyid) REFERENCES key (keyid),
-            FOREIGN KEY (listid) REFERENCES list (listid)
-        );
-        CREATE INDEX IF NOT EXISTS map_list ON map (listid);
-
-        CREATE TABLE IF NOT EXISTS list (
-            itemid INTEGER PRIMARY KEY AUTOINCREMENT,
-            listid INTEGER NOT NULL,
-            value TEXT NOT NULL,
-            CONSTRAINT unique_list_value UNIQUE (listid, value) ON CONFLICT IGNORE
-        );
-        CREATE INDEX IF NOT EXISTS list_id ON list (listid);
-        CREATE INDEX IF NOT EXISTS list_value ON list (value);
-
-        CREATE TABLE IF NOT EXISTS sync_state (
-            peername STRING PRIMARY KEY,
-            last_received INTEGER NOT NULL
-        );
-        """)
 
 def _sql_condition(k,v):
     match_query = """SELECT DISTINCT objid FROM map
@@ -206,8 +46,8 @@ class DB(object):
     ANY = ANY
     Starts = Starts
 
-    def __init__(self, config, sync=True):
-        self.conn = sqlite3.connect(config.get('DB', 'file'), timeout=60, isolation_level='DEFERRED')
+    def __init__(self, path, sync=True):
+        self.conn = sqlite3.connect(path, timeout=60, isolation_level='DEFERRED')
         self.conn.execute("PRAGMA synchronous = %s" % (sync and 'NORMAL' or 'OFF'))
         self.cursor = self.conn.cursor()
         create_DB(self.conn)
@@ -391,28 +231,3 @@ class DB(object):
 
     def set_sync_state(self, peername, last_received):
         self.conn.cursor().execute("INSERT OR REPLACE INTO sync_state (peername, last_received) VALUES (?, ?)", (peername, last_received))
-
-def open(config, sync=True):
-    return DB(config, sync=sync)
-
-if __name__ == '__main__':
-    import config
-    db = DB(config.read())
-
-    obj = db['myasset']
-    obj[u'name'] = ValueSet(u'monkeyman', t=time())
-    print "Yeah, I got", str(obj), obj._dirty
-
-    db.update(obj)
-    print "Yeah, I got", str(obj), obj._dirty
-
-    obj = db['myasset']
-    print "Yeah, I got", str(obj), obj._dirty
-
-    for obj in db.query({'name': 'monkeyman'}):
-        print obj
-
-    for k,c in db.list_keys():
-        print k,c
-
-    db.commit()

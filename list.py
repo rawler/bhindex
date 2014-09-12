@@ -45,7 +45,7 @@ if __name__=='__main__':
     else:
         path=[]
 
-    thisdb = DB(db.open(config))
+    thisdb = DB(db.open(config.get('DB', 'file')))
     if options.dir:
         thisdb.dir(path)
     else:

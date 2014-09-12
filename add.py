@@ -85,7 +85,7 @@ if __name__ == '__main__':
     # Parse into DB-tag-objects
     tags = cliopt.parse_attrs(options.tags)
 
-    DB = db.open(config)
+    DB = db.open(config.get('DB', 'file'))
     SCRAPERS = set(options.scrapers.split(','))
 
     def add(file, tags, exts=None):

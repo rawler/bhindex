@@ -164,7 +164,7 @@ if __name__ == '__main__':
     import db, config, sys, cliopt
 
     config = config.read()
-    db = db.open(config)
+    db = db.open(config.get('DB', 'file'))
 
     usage = "usage: %prog [options] [assetid] ..."
     parser = cliopt.OptionParser(usage=usage)
