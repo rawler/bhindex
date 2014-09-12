@@ -97,7 +97,14 @@ class Asset:
 
     def status(self):
         if self._statusWatch:
-            return self._statusWatch.wait()
+            if not self._client:
+                return None
+
+            with eventlet.Timeout(self._client.config['asset_timeout'], False):
+                return self._statusWatch.wait()
+
+            logger.debug("Status() timeout on %s:%d", self._client, self._handle)
+            return None
         else:
             return self._status
 
@@ -141,6 +148,7 @@ class Client:
                 self._connection.send(message.Ping())
             else:
                 print "Unhandled message: ", type(msg), msg
+        # TODO: handle closing assets on connection close
 
     def _processStatus(self, status):
         handle = status.handle

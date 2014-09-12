@@ -50,7 +50,7 @@ def cachedAssetLiveChecker(bithorde, assets, db=None):
 
         with bithorde.open(ids) as bhAsset:
             status = bhAsset.status()
-            status_ok = status.status == message.SUCCESS
+            status_ok = status and status.status == message.SUCCESS
             dbAsset[u'bh_status'] = ValueSet((unicode(status_ok),), t=t)
             dbAsset[u'bh_status_confirmed'] = ValueSet((unicode(t),), t=t)
             if status.size is not None:
