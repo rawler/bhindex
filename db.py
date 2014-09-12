@@ -62,6 +62,10 @@ class Object(object):
     def get(self, key, default=None):
         return self._dict.get(key, default)
 
+    def any(self, key, default=None):
+        values = self._dict.get(key)
+        return values and values.any() or default
+
     def __contains__(self, key):
         return key in self._dict
 
