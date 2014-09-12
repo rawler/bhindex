@@ -169,9 +169,7 @@ def create_DB(conn):
         );
         """)
 
-def _sql_for_criteria(crit):
-    sql = []
-    params = []
+def _sql_condition(k,v):
     match_query = """SELECT DISTINCT objid FROM map
                         NATURAL JOIN list
                         NATURAL JOIN key
@@ -185,18 +183,22 @@ def _sql_for_criteria(crit):
                                     NATURAL JOIN key
                                     WHERE key = ? AND listid IS NOT NULL
                             )"""
+    if v is ANY:
+        return (any_query, (k,))
+    elif v is None:
+        return (absent_query, (k,))
+    elif isinstance(v, Starts):
+        return (match_query, (k, v+'%'))
+    else:
+        return (match_query, (k, v))
+
+def _sql_for_criteria(crit):
+    sql = []
+    params = []
     for k,v in crit.iteritems():
-        params.append(k)
-        if v is ANY:
-            sql.append(any_query)
-        elif v is None:
-            sql.append(absent_query)
-        elif isinstance(v, Starts):
-            sql.append(match_query)
-            params.append(v+'%')
-        else:
-            sql.append(match_query)
-            params.append(v)
+        sql_fragment, new_params = _sql_condition(k,v)
+        sql.append(sql_fragment)
+        params += new_params
 
     return " INTERSECT ".join(sql), params
 
