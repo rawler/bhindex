@@ -100,7 +100,7 @@ class Asset:
             if not self._client:
                 return None
 
-            with eventlet.Timeout(self._client.config['asset_timeout'], False):
+            with eventlet.Timeout(self._client.config['asset_timeout'] / 1000.0, False):
                 return self._statusWatch.wait()
 
             logger.debug("Status() timeout on %s:%d", self._client, self._handle)
