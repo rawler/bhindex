@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from database import ANY, Starts, DB
-from object import ValueSet, Object
+from obj import ValueSet, Object
 
 def open(path, sync=True):
     return DB(path, sync=sync)
