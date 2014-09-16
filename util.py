@@ -53,7 +53,7 @@ def cachedAssetLiveChecker(bithorde, assets, db=None):
             status_ok = status and status.status == message.SUCCESS
             dbAsset[u'bh_status'] = ValueSet((unicode(status_ok),), t=t)
             dbAsset[u'bh_status_confirmed'] = ValueSet((unicode(t),), t=t)
-            if status.size is not None:
+            if status and (status.size is not None):
                 if status.size > 2**40:
                     print dbAsset['xt']
                     print status.size
