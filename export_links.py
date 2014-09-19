@@ -56,11 +56,12 @@ def path_in_prefixes(path, prefixes):
             return True
     return False
 
-def main(force_all=False, prefixes=[]):
+def main(force_all=False, output_dir=LINKDIR, prefixes=[]):
     DB = db.open(config.get('DB', 'file'))
     bithorde = Client(parseConfig(config.items('BITHORDE')))
 
     t = time()
+    count = size = 0
 
     crit = {'path': db.ANY, 'xt': db.ANY}
     if not force_all:
@@ -76,12 +77,16 @@ def main(force_all=False, prefixes=[]):
                 continue
 
             tgt = path.join(BHFUSEDIR, magnet.fromDbObject(asset))
-            dst = path.normpath(path.join(LINKDIR, p))
-            if (not dst.startswith(LINKDIR)) or len(dst) <= len(LINKDIR):
+            dst = path.normpath(path.join(output_dir, p))
+            if (not dst.startswith(output_dir)) or len(dst) <= len(output_dir):
                 print "Warning! %s (%s) tries to break out of directory!" % (dst, tgt)
                 continue
 
             print u"Linking %s -> %s" % (dst, tgt)
+            fsize = int(asset.any('filesize') or 0)
+            if fsize and (fsize < 1024*1024*1024*1024): # Reasonably sized file
+                count += 1
+                size += int(fsize)
             if not link(dst, tgt):
                 success = False
 
@@ -89,12 +94,17 @@ def main(force_all=False, prefixes=[]):
                 asset[u'@linked'] = db.ValueSet((u'true',), t=t)
                 with DB.transaction():
                     DB.update(asset)
+    return count, size
 
 if __name__=='__main__':
     parser = OptionParser(usage="usage: %prog [options] [path...]")
     parser.add_option("-T", "--force-all", action="store_true",
                       dest="force_all", default=False,
                       help="Normally, only links not marked with @linked in db, added. This removes that check, adding ALL links.")
+    parser.add_option("-o", "--output-dir", action="store",
+                      dest="output_dir", default=LINKDIR,
+                      help="Directory to write links to")
     (options, args) = parser.parse_args()
 
-    main(options.force_all, args)
+    count, size = main(prefixes=args, force_all=options.force_all, output_dir=options.output_dir)
+    print("Exported %s assets totaling %s GB" % (count, size/(1024*1024*1024)))
