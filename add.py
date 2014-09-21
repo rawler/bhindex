@@ -10,6 +10,7 @@ HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
 import db, config, export_txt, export_links, magnet, scraper
+from util import make_directory
 
 config = config.read()
 
@@ -123,7 +124,10 @@ if __name__ == '__main__':
         asset = bh_upload(file, options.upload_link)
         if asset:
             asset.name = name
+
             t = time()
+            path_list = name.split('/')
+            asset[u'directory'] = db.ValueSet(u"%s/%s" % (make_directory(DB, path_list[:-1], t), path_list[-1]), t)
             for k,v in tags.iteritems():
                 v.t = t
                 asset[k] = v

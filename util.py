@@ -1,9 +1,12 @@
 import sys
+from base64 import urlsafe_b64encode as b64encode
+from uuid import uuid4
+from time import time
 
 import eventlet
 from bithorde import parseHashIds, message
-from time import time
 from db import ValueSet
+
 
 class DelayedAction(object):
     def __init__(self, action):
@@ -108,3 +111,22 @@ class Progress(Counter):
     def wait(self):
         return self.printer.wait()
 
+def get_folder_id(db, parent_id, name, t):
+    directory_attr = u'%s/%s' % (parent_id, name)
+    folders = list(db.query_ids({u'directory': directory_attr}))
+    if folders:
+        if len(folders) > 1:
+            log.warning("Duplicate folders for %s" % directory_attr)
+        return folders[0]
+    else:
+        folder_id = u'dir:%s' % b64encode(uuid4().bytes).strip('=')
+        folder = db[folder_id]
+        folder[u'directory'] = ValueSet((directory_attr,), t=t)
+        db.update(folder)
+        return folder_id
+
+def make_directory(db, directory, t):
+    dir_id = u"dir:"
+    for segment in directory:
+        dir_id = get_folder_id(db, dir_id, segment, t)
+    return dir_id
