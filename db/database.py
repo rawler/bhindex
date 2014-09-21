@@ -10,6 +10,10 @@ class Starts(unicode):
     pass
 
 def _sql_condition(k,v):
+    equal_query = """SELECT DISTINCT objid FROM map
+                        NATURAL JOIN list
+                        NATURAL JOIN key
+                     WHERE key = ? AND list.value = ?"""
     match_query = """SELECT DISTINCT objid FROM map
                         NATURAL JOIN list
                         NATURAL JOIN key
@@ -30,7 +34,7 @@ def _sql_condition(k,v):
     elif isinstance(v, Starts):
         return (match_query, (k, v+'%'))
     else:
-        return (match_query, (k, v))
+        return (equal_query, (k, v))
 
 def _sql_for_criteria(crit):
     sql = []
