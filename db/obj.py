@@ -18,9 +18,10 @@ class ValueSet(set):
         self.t = max([t, self.t])
         set.update(self, v)
 
-    def any(self):
+    def any(self, default=None):
         for x in self:
             return x
+        return default
 
     def join(self, sep=u', '):
         return unicode(sep).join(self)
@@ -45,7 +46,7 @@ class Object(object):
 
     def any(self, key, default=None):
         values = self._dict.get(key)
-        return values and values.any() or default
+        return values and values.any(default)
 
     def __contains__(self, key):
         return key in self._dict
