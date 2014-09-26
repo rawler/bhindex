@@ -1,4 +1,4 @@
-import sys
+import codecs,sys
 from base64 import urlsafe_b64encode as b64encode
 from uuid import uuid4
 from time import time
@@ -7,6 +7,10 @@ import eventlet
 from bithorde import parseHashIds, message
 from db import ValueSet
 
+if not sys.stdout.encoding:
+    sys.stdout = codecs.getwriter('utf8')(sys.stdout)
+if not sys.stderr.encoding:
+    sys.stderr = codecs.getwriter('utf8')(sys.stderr)
 
 class DelayedAction(object):
     def __init__(self, action):
