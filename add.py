@@ -133,7 +133,7 @@ if __name__ == '__main__':
                 asset[k] = v
             scraper.scrape_for(asset, SCRAPERS)
             for k,v in sorted(asset.iteritems()):
-                print (u"%s: %s" % (k, v.join())).encode('utf-8')
+                print u"%s: %s" % (k, v.join())
 
             DB.update(asset)
             global do_export
