@@ -48,6 +48,10 @@ CONFIG_DEFAULTS = {
     },
     "TXTSYNC": {
         "asset_import_timeout": "2500",
+        "exportpath": "",
+    },
+    "LINKSEXPORT": {
+        "linksdir": "",
     },
     "LIVESYNC": {
         "name": gethostname(),

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os, os.path as path, shutil, sys, json
+import json, os, os.path as path, shutil, sys
 from ConfigParser import ConfigParser
 import subprocess
 
@@ -114,9 +114,13 @@ if __name__=='__main__':
     else:
         outfile = TXTPATH
 
-    main(
-        outfile=outfile,
-        all_objects=options.all_objects,
-        all_attributes=options.all_attributes,
-        verbose=options.verbose,
-    )
+    if outfile:
+        main(
+            outfile=outfile,
+            all_objects=options.all_objects,
+            all_attributes=options.all_attributes,
+            verbose=options.verbose,
+        )
+    else:
+        print("Needs text outfile in either config or as argument\n")
+        parser.print_help()

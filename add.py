@@ -173,8 +173,8 @@ if __name__ == '__main__':
     finally:
            DB.commit()
 
-    if options.export_links and do_export == True:
+    if options.export_links and export_links.LINKDIR and do_export == True:
        export_links.main()
-    if options.export_txt and do_export == True:
+    if options.export_txt and export_txt.TXTPATH and do_export == True:
        export_txt.main()
 

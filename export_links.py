@@ -97,7 +97,9 @@ def main(force_all=False, output_dir=LINKDIR, prefixes=[]):
     return count, size
 
 if __name__=='__main__':
-    parser = OptionParser(usage="usage: %prog [options] [path...]")
+    usage = """usage: %prog [options] [path] ...
+'output-dir' will be read from config, unless provided"""
+    parser = OptionParser(usage=usage)
     parser.add_option("-T", "--force-all", action="store_true",
                       dest="force_all", default=False,
                       help="Normally, only links not marked with @linked in db, added. This removes that check, adding ALL links.")
@@ -106,5 +108,10 @@ if __name__=='__main__':
                       help="Directory to write links to")
     (options, args) = parser.parse_args()
 
-    count, size = main(prefixes=args, force_all=options.force_all, output_dir=options.output_dir)
-    print("Exported %s assets totaling %s GB" % (count, size/(1024*1024*1024)))
+
+    if options.output_dir:
+        count, size = main(prefixes=args, force_all=options.force_all, output_dir=options.output_dir)
+        print("Exported %s assets totaling %s GB" % (count, size/(1024*1024*1024)))
+    else:
+        print("Needs link output-dir in either config or as argument\n")
+        parser.print_help()
