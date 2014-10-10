@@ -26,30 +26,30 @@ class DelayedAction(object):
         self.action()
 
 ASSET_WAIT_FACTOR = 0.01
+def hasValidStatus(dbAsset, t=time()):
+    try:
+        dbStatus = dbAsset['bh_status']
+        dbConfirmedStatus = dbAsset['bh_status_confirmed']
+    except KeyError:
+        return None
+    stable = dbConfirmedStatus.t - dbStatus.t
+    nextCheck = dbConfirmedStatus.t + (stable * ASSET_WAIT_FACTOR)
+    if t < nextCheck:
+        return dbStatus.any() == 'True'
+    else:
+        return None
+
 def cachedAssetLiveChecker(bithorde, assets, db=None):
     t = time()
     dirty = Counter()
     if db:
         commit_pending = DelayedAction(db.commit)
 
-    def hasValidStatus(dbAsset):
-        try:
-            dbStatus = dbAsset['bh_status']
-            dbConfirmedStatus = dbAsset['bh_status_confirmed']
-        except KeyError:
-            return None
-        stable = dbConfirmedStatus.t - dbStatus.t
-        nextCheck = dbConfirmedStatus.t + (stable * ASSET_WAIT_FACTOR)
-        if t < nextCheck:
-            return dbStatus
-        else:
-            return None
-
     def checkAsset(dbAsset):
-        dbStatus = hasValidStatus(dbAsset)
-        if dbStatus:
-            eventlet.sleep()
-            return dbAsset, bool(dbStatus.any())
+        dbStatus = hasValidStatus(dbAsset, t)
+        if dbStatus is not None:
+            eventlet.sleep() # Not sleeping here could starve other greenlets
+            return dbAsset, dbStatus
 
         ids = parseHashIds(dbAsset['xt'])
         if not ids:
