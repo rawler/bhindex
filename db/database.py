@@ -108,9 +108,14 @@ class DB(object):
             self.__idCache[(tbl, id)] = id
             return id
 
-    def __getitem__(self, objid):
-        obj = Object(objid)
-        for key, timestamp, listid in self._query_all("SELECT key, timestamp, listid FROM map NATURAL JOIN key NATURAL JOIN obj WHERE obj = ?", (objid,)):
+    def __getitem__(self, obj):
+        if isinstance(obj, int):
+            objid = obj
+            obj = self._query_single('SELECT obj FROM obj WHERE objid = ?', (objid,))
+        else:
+            objid = self._query_single('SELECT objid FROM obj WHERE obj = ?', (obj,))
+        obj = Object(obj)
+        for key, timestamp, listid in self._query_all("SELECT key, timestamp, listid FROM map NATURAL JOIN key WHERE objid = ?", (objid,)):
             values = ValueSet(v=(x for x, in self._query_all("SELECT value FROM list WHERE listid = ?", (listid,))), t=timestamp)
             obj._dict[key] = values
         return obj
