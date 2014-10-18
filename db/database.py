@@ -9,15 +9,31 @@ ANY = object()
 class Starts(unicode):
     pass
 
+def quote_identifier(s, errors="strict"):
+    encodable = s.encode("utf-8", errors).decode("utf-8")
+
+    nul_index = encodable.find("\x00")
+
+    if nul_index >= 0:
+        error = UnicodeEncodeError("NUL-terminated utf-8", encodable,
+                                   nul_index, nul_index + 1, "NUL not allowed")
+        error_handler = codecs.lookup_error(errors)
+        replacement, _ = error_handler(error)
+        encodable = encodable.replace("\x00", replacement)
+
+    return "\"" + encodable.replace("\"", "\"\"") + "\""
+
+
 def _sql_condition(k,v):
     equal_query = """SELECT DISTINCT objid FROM map
                         NATURAL JOIN list
                         NATURAL JOIN key
                      WHERE key = ? AND list.value = ?"""
-    match_query = """SELECT DISTINCT objid FROM map
-                        NATURAL JOIN list
-                        NATURAL JOIN key
-                     WHERE key = ? AND list.value LIKE ?"""
+    starts_query = """SELECT DISTINCT objid FROM map
+                     WHERE
+                        keyid = (SELECT keyid FROM key WHERE key = ?)
+                       AND
+                        listid IN (SELECT listid FROM list WHERE value GLOB '%s*')"""
     any_query =   """SELECT DISTINCT objid FROM map
                         NATURAL JOIN key
                      WHERE key = ?"""
@@ -32,7 +48,7 @@ def _sql_condition(k,v):
     elif v is None:
         return (absent_query, (k,))
     elif isinstance(v, Starts):
-        return (match_query, (k, v+'%'))
+        return (starts_query % v.replace("'", "''"), (k,))
     else:
         return (equal_query, (k, v))
 
