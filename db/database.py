@@ -175,8 +175,13 @@ class DB(object):
         for objid, in self._query_all(query, params):
             yield objid
 
+    def query_raw_ids(self, criteria):
+        query, params = _sql_for_criteria(criteria)
+        for objid, in self._query_all(query, params):
+            yield objid
+
     def query(self, criteria):
-        for objid in self.query_ids(criteria):
+        for objid in self.query_raw_ids(criteria):
             yield self[objid]
 
     def all_ids(self):
