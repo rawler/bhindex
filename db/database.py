@@ -108,17 +108,23 @@ class DB(object):
             self.__idCache[(tbl, id)] = id
             return id
 
-    def __getitem__(self, obj):
+    def get(self, obj, fields=None):
         if isinstance(obj, int):
             objid = obj
             obj = self._query_single('SELECT obj FROM obj WHERE objid = ?', (objid,))
         else:
             objid = self._query_single('SELECT objid FROM obj WHERE obj = ?', (obj,))
         obj = Object(obj)
-        for key, timestamp, listid in self._query_all("SELECT key, timestamp, listid FROM map NATURAL JOIN key WHERE objid = ?", (objid,)):
+        query = "SELECT key, timestamp, listid FROM map NATURAL JOIN key WHERE objid = ?"
+        if fields is not None:
+            query += " AND key IN (" + ', '.join(('?',) * len(fields)) + ")"
+        for key, timestamp, listid in self._query_all(query, (objid,)+tuple(fields or ())):
             values = ValueSet(v=(x for x, in self._query_all("SELECT value FROM list WHERE listid = ?", (listid,))), t=timestamp)
             obj._dict[key] = values
         return obj
+
+    def __getitem__(self, obj):
+        return self.get(obj)
 
     def get_attr(self, objid, attr):
         row = self._query_first("SELECT timestamp, listid FROM map NATURAL JOIN key NATURAL JOIN obj WHERE obj = ? AND key = ?", (objid, attr))
@@ -180,9 +186,9 @@ class DB(object):
         for objid, in self._query_all(query, params):
             yield objid
 
-    def query(self, criteria):
+    def query(self, criteria, fields=None):
         for objid in self.query_raw_ids(criteria):
-            yield self[objid]
+            yield self.get(objid, fields)
 
     def all_ids(self):
         for objid, in self._query_all('SELECT DISTINCT obj FROM map NATURAL JOIN obj', ()):
