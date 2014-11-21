@@ -38,10 +38,10 @@ def _sql_condition(k,v):
                         NATURAL JOIN key
                      WHERE key = ?"""
     absent_query =   """SELECT DISTINCT objid FROM obj
-                            WHERE objid NOT IN (
-                                SELECT objid FROM map
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM map
                                     NATURAL JOIN key
-                                    WHERE key = ? AND listid IS NOT NULL
+                                    WHERE obj.objid = map.objid AND key = ? AND listid IS NOT NULL
                             )"""
     if v is ANY:
         return (any_query, (k,))
