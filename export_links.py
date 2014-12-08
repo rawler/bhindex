@@ -83,17 +83,18 @@ def main(force_all=False, output_dir=LINKDIR, prefixes=[]):
                 continue
 
             print u"Linking %s -> %s" % (dst, tgt)
-            fsize = int(asset.any('filesize') or 0)
-            if fsize and (fsize < 1024*1024*1024*1024): # Reasonably sized file
-                count += 1
-                size += int(fsize)
             if not link(dst, tgt):
                 success = False
 
         if success:
-                asset[u'@linked'] = db.ValueSet((u'true',), t=t)
-                with DB.transaction():
-                    DB.update(asset)
+            fsize = int(asset.any('filesize') or 0)
+            if fsize and (fsize < 1024*1024*1024*1024): # Reasonably sized file
+                count += 1
+                size += int(fsize)
+
+            asset[u'@linked'] = db.ValueSet((u'true',), t=t)
+            with DB.transaction():
+                DB.update(asset)
     return count, size
 
 if __name__=='__main__':
