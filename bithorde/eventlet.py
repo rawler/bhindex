@@ -84,15 +84,17 @@ class Asset:
         self._statusWatch = eventlet.event.Event()
 
     def close(self):
-        if self._handle:
+        if self._handle is not None:
             self._client._close(self._handle)
-        del self._client
-        del self._handle
+        self._client = self._handle = None
 
     def __enter__(self):
         return self
 
     def __exit__(self, type, value, traceback):
+        self.close()
+
+    def __delete__(self):
         self.close()
 
     def status(self):
