@@ -1,4 +1,4 @@
-import codecs,sys
+import codecs, logging, sys
 from base64 import urlsafe_b64encode as b64encode
 from uuid import uuid4
 from time import time
@@ -11,6 +11,8 @@ if not sys.stdout.encoding:
     sys.stdout = codecs.getwriter('utf8')(sys.stdout)
 if not sys.stderr.encoding:
     sys.stderr = codecs.getwriter('utf8')(sys.stderr)
+
+log = logging.getLogger('util')
 
 class DelayedAction(object):
     def __init__(self, action):
