@@ -12,8 +12,6 @@ if not sys.stdout.encoding:
 if not sys.stderr.encoding:
     sys.stderr = codecs.getwriter('utf8')(sys.stderr)
 
-log = logging.getLogger('util')
-
 class DelayedAction(object):
     def __init__(self, action):
         self.action = action
@@ -122,7 +120,9 @@ def get_folder_id(db, parent_id, name, t):
     folders = list(db.query_ids({u'directory': directory_attr}))
     if folders:
         if len(folders) > 1:
-            log.warning("Duplicate folders for %s" % directory_attr)
+            logging.basicConfig()
+            log = logging.getLogger('util')
+            log.warning("Duplicate folders for %s: %r", directory_attr, folders)
         return folders[0]
     else:
         folder_id = u'dir:%s' % b64encode(uuid4().bytes).strip('=')
