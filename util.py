@@ -2,6 +2,7 @@ import codecs, logging, sys
 from base64 import urlsafe_b64encode as b64encode
 from uuid import uuid4
 from time import time
+from types import GeneratorType
 
 import eventlet
 from bithorde import parseHashIds, message
@@ -136,3 +137,30 @@ def make_directory(db, directory, t):
     for segment in directory:
         dir_id = get_folder_id(db, dir_id, segment, t)
     return dir_id
+
+
+class Timed:
+    def __init__(self, tag):
+        self.tag = tag
+        self.log = logging.getLogger('timed')
+
+    def __enter__(self):
+        self.start = time()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        delta = (time() - self.start) * 1000
+        self.log.debug("<%s>: %.1fms" % (self.tag, delta))
+
+def timed(method):
+    def timed(*args, **kw):
+        with Timed("%r (%r, %r)" % (method.__name__, args, kw)):
+            res = method(*args, **kw)
+            if isinstance(res, GeneratorType):
+                return list(res)
+            else:
+                return res
+
+        return result
+
+    return timed
