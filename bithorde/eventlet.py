@@ -1,4 +1,4 @@
-from __future__ import  absolute_import
+from __future__ import absolute_import
 
 import socket, re, logging
 from cStringIO import StringIO
@@ -82,6 +82,7 @@ class Asset:
         self._handle = handle
         self._status = None
         self._statusWatch = eventlet.event.Event()
+        self._pendingReads = dict()
 
     def close(self):
         if self._handle is not None:
@@ -116,6 +117,16 @@ class Asset:
             self._statusWatch.send(status)
             self._statusWatch = None
 
+    def read(self, offset, size):
+        assert self._client, self._handle
+
+        timeout = (self._client.config['asset_timeout'] * 3)
+        request = message.Read.Request(handle = self._handle, offset=offset, size=size, timeout=timeout)
+
+        response = self._client._read(request)
+
+        return response and response.content
+
 class Client:
     def __init__(self, config):
         self.config = config
@@ -124,6 +135,9 @@ class Client:
         self._pool = eventlet.GreenPool(config['pressure'])
         self._connection = Connection(config['address'], config.get('myname', 'bhindex'))
         self._reader = eventlet.spawn(self._reader)
+
+        self._reqIdAllocator = _Allocator()
+        self._pendingReads = dict()
 
     def __repr__(self):
         return "Client(peername=%s)" % self._connection.peername
@@ -134,6 +148,27 @@ class Client:
         self._assets[handle] = asset
         self._connection.send(message.BindRead(handle=handle, ids=hashIds, timeout=self.config['asset_timeout']))
         return asset
+
+    def _read(self, request):
+        response = None
+        retries = 0
+        reqId = self._reqIdAllocator.alloc()
+        try:
+            request.reqId = reqId
+            respond = eventlet.event.Event()
+            self._pendingReads[reqId] = respond
+            self._connection.send(request)
+            timeout = (request.timeout + 250) / 1000.0
+
+            while not response and retries < 3:
+                retries += 1
+                with eventlet.Timeout(timeout, False):
+                    response = respond.wait()
+        finally:
+            self._reqIdAllocator.free(reqId)
+            del self._pendingReads[reqId]
+
+        return response
 
     def pool(self):
         return self._pool
@@ -146,6 +181,8 @@ class Client:
         for msg in self._connection:
             if isinstance(msg, message.AssetStatus):
                 self._processStatus(msg)
+            elif isinstance(msg, message.Read.Response):
+                self._processReadResponse(msg)
             elif isinstance(msg, message.Ping):
                 self._connection.send(message.Ping())
             else:
@@ -169,30 +206,17 @@ class Client:
                 del self._assets[handle]
                 self._handleAllocator.free(handle)
 
+    def _processReadResponse(self, response):
+        try:
+            event = self._pendingReads[response.reqId]
+        except KeyError:
+            logger.warn("Ignoring unrecognized %s ReadResponse", response)
+            return
+        event.send(response)
+
 def parseConfig(c):
     return dict(
         pressure = int(c['pressure']),
         address = c['address'],
         asset_timeout = int(c['asset_timeout']),
     )
-
-if __name__ == '__main__':
-    import sys
-    client = Client({
-        'pressure': 10,
-        'address': '/tmp/bithorde.source',
-        'asset_timeout': 3000
-    })
-
-    def check_asset(arg):
-        ids = parseHashId(arg)
-        if ids:
-            with client.open(ids) as asset: # Bithorde assets are context-managers, YAY!
-                return asset.status()
-        else:
-            print "Warning, failed to parse: ", addr
-
-    # Run a bunch in parallel, controlled by a pool
-    for status in client.pool().imap(check_asset, sys.argv[1:]):
-        if status:
-            print status
