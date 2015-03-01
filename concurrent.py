@@ -23,7 +23,7 @@ try:
             pass
 
 except ImportError:
-    import ctypes, socket, threading
+    import ctypes, socket, threading, weakref
     from time import sleep as _sleep, time
 
     from multiprocessing.pool import ThreadPool
@@ -44,6 +44,8 @@ except ImportError:
 
     class Pool(ThreadPool):
         def __init__(self, size):
+            if not hasattr(threading.current_thread(), "_children"):
+                threading.current_thread()._children = weakref.WeakKeyDictionary()
             ThreadPool.__init__(self, size)
         def spawn(self, func, *args, **kwargs):
             self.apply_async(func, args, kwargs)
@@ -123,7 +125,7 @@ except ImportError:
 
         def run(self):
             if not self._done.wait(self.duration):
-                _async_raise(tid, self.excobj)
+                _async_raise(self._tid, self.excobj)
 
     def spawn(func, *args, **kwargs):
         t = Thread(target=func, args=args, kwargs=kwargs)
