@@ -326,4 +326,4 @@ if __name__ == '__main__':
         fsopts = [ 'fsname=bhindex', 'nonempty', 'debug', 'allow_other', 'max_read=65536', 'ro' ]
         operations = Operations(bithorde=bithorde, mountpoint=mountpoint, options=fsopts)
     except Exception, e:
-        log.exception("Error!", exc_info=True)
+        log.exception("Error!")
