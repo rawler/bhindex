@@ -257,8 +257,8 @@ class Operations(fusell.FUSELL):
 
     def open(self, inode, flags):
         inode = self._inode_resolve(inode, File)
-        supported_flags = os.O_RDONLY | os.O_LARGEFILE
-        if (flags & supported_flags) != flags:
+        unsupported_flags = os.O_WRONLY | os.O_RDWR
+        if (flags & unsupported_flags):
             raise(fusell.FUSEError(errno.EINVAL))
         fh = fh_pool.get()
         asset = self.bithorde.open(inode.ids())
