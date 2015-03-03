@@ -305,11 +305,11 @@ def copy_value(x):
         return x
 
 class FUSELL(object):
-    def __init__(self, mountpoint, options = []):
+    def __init__(self, mountpoint, fuse_options = [], parallel=8):
         self.libfuse = LibFUSE()
 
         args = ['fuse']
-        for opt in options:
+        for opt in fuse_options:
             args += ['-o', opt]
         argv = fuse_args(len(args), (c_char_p * len(args))(*args), 0)
 
@@ -318,7 +318,7 @@ class FUSELL(object):
         chan = self.libfuse.fuse_mount(mountpoint, argv)
         assert chan
 
-        self.pool = Pool(size=32)
+        self.pool = Pool(size=parallel)
 
         with guard(self.libfuse.fuse_unmount, mountpoint, chan):
             self._fuse_run_session(chan, argv)
