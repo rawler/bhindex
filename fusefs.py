@@ -310,16 +310,9 @@ if __name__ == '__main__':
     bithorde = Client(parseConfig(config.items('BITHORDE')), autoconnect=False)
     bithorde.connect()
 
-    mount_point_created = None
     if not os.path.exists(mountpoint):
         os.mkdir(mountpoint)
-        mount_point_created = mountpoint
-
-    def cleanup(remove_mountpoint):
-        if remove_mountpoint:
-            os.rmdir(remove_mountpoint)
-
-    atexit.register(cleanup, mount_point_created)
+        atexit.register(lambda: os.rmdir(mountpoint))
 
     try:
         print("Entering llfuse")
