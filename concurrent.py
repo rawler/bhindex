@@ -2,6 +2,7 @@
 Utility-module to wrap essential parts of the Evenlet-API.
 Falls back to regular threads where eventlet is unavailable
 '''
+from __future__ import print_function
 
 try:
     import eventlet
@@ -23,7 +24,7 @@ try:
             pass
 
 except ImportError:
-    import ctypes, socket, threading, weakref
+    import ctypes, socket, sys, threading, traceback, weakref
     from time import sleep as _sleep, time
 
     from multiprocessing.pool import ThreadPool
@@ -47,8 +48,16 @@ except ImportError:
             if not hasattr(threading.current_thread(), "_children"):
                 threading.current_thread()._children = weakref.WeakKeyDictionary()
             ThreadPool.__init__(self, size)
-        def spawn(self, func, *args, **kwargs):
-            self.apply_async(func, args, kwargs)
+        def _catch_exc(self, func, *args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except:
+                print("Exception caught in ThreadPool", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+
+        def spawn(self, *args, **kwargs):
+            # First arg in args is the function to execute
+            self.apply_async(self._catch_exc, args, kwargs)
 
     class Event:
         def __init__(self):
