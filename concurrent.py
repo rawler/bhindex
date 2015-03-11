@@ -96,17 +96,12 @@ except ImportError:
         def wait(self):
             return self.join()
 
-        def raise_exc(self, excobj):
+        def kill(self, excobj=SystemExit):
             assert self.isAlive(), "thread must be started"
             for tid, tobj in threading._active.items():
                 if tobj is self:
                     _async_raise(tid, excobj)
                     return
-
-        def terminate(self):
-            # must raise the SystemExit type, instead of a SystemExit() instance
-            # due to a bug in PyThreadState_SetAsyncExc
-            self.raise_exc(SystemExit)
 
     class Timeout(threading.Thread):
         def __init__(self, duration, excobj = None):
