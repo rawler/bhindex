@@ -308,21 +308,38 @@ class FUSELL(object):
     def __init__(self, filesystem, mountpoint, fuse_options = [], parallel=8):
         self.filesystem = filesystem
         self.libfuse = LibFUSE()
-
-        args = ['fuse']
-        for opt in fuse_options:
-            args += ['-o', opt]
-        argv = fuse_args(len(args), (c_char_p * len(args))(*args), 0)
+        self.mountpoint = mountpoint
+        self.fuse_options = fuse_options
+        self.parallel = parallel
+        self._chan = self._pool = None
 
         # TODO: handle initialization errors
 
-        chan = self.libfuse.fuse_mount(mountpoint, argv)
-        assert chan
+    def run(self):
+        assert self._chan is None
 
-        self.pool = Pool(size=parallel)
+        args = ['fuse']
+        for opt in self.fuse_options:
+            args += ['-o', opt]
+        argv = fuse_args(len(args), (c_char_p * len(args))(*args), 0)
 
-        with guard(self.libfuse.fuse_unmount, mountpoint, chan):
-            self._fuse_run_session(chan, argv)
+        self._pool = Pool(size=self.parallel)
+
+        self._chan = self.libfuse.fuse_mount(self.mountpoint, argv)
+        assert self._chan
+
+        with guard(self.unmount):
+            self._fuse_run_session(self._chan, argv)
+
+    def unmount(self):
+        chan = self._chan
+        pool = self._pool
+        self._chan = self._pool = None
+        if chan:
+            self.libfuse.fuse_unmount(self.mountpoint, chan)
+        if pool:
+            pool.kill()
+            pool.join()
 
     def _dispatcher(self, method):
         def _handler(req, *args):
@@ -333,7 +350,7 @@ class FUSELL(object):
         def _dispatch(req, *args):
             # Copy pointer-values in args. They will not be valid later
             args = [copy_value(x) for x in args]
-            self.pool.spawn(_handler, req, *args)
+            self._pool.spawn(_handler, req, *args)
         return _dispatch
 
     def _fuse_run_session(self, chan, argv):
@@ -358,6 +375,8 @@ class FUSELL(object):
                     trampoline(fd, read=True)
                     data = create_string_buffer(64*1024)
                     read = self.libfuse.fuse_chan_recv(c_void_p_p(c_void_p(chan)), data, len(data))
+                    if not self._chan:
+                        break
                     assert read > 0
                     self.libfuse.fuse_session_process(session, data[0:read], read, chan)
 
