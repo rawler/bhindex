@@ -82,7 +82,7 @@ def main(force_all=False, output_dir=LINKDIR, prefixes=[]):
                 print "Warning! %s (%s) tries to break out of directory!" % (dst, tgt)
                 continue
 
-            print u"Linking %s -> %s" % (dst, tgt)
+            print u"Linking %s -> %s".encode('utf-8') % (dst, tgt)
             if not link(dst, tgt):
                 success = False
 
