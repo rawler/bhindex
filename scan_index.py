@@ -5,11 +5,9 @@ import os, os.path as path, sys
 from ConfigParser import ConfigParser
 from optparse import OptionParser
 import subprocess
-from time import time
 
 from bithorde.eventlet import Client, parseConfig
-import eventlet
-from util import cachedAssetLiveChecker
+from util import cachedAssetLiveChecker, RepeatingTimer
 
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
@@ -24,25 +22,26 @@ def main(verbose, all_objects):
     DB = db.open(config.get('DB', 'file'))
     bithorde = Client(parseConfig(config.items('BITHORDE')))
 
-    proc_count = 0
+    class StepCounter:
+        def __init__(self):
+            self.i = 0
+        def inc(self):
+            self.i += 1
+        def read_and_reset(self):
+            res = self.i
+            self.i = 0
+            return res
+    proc_count = StepCounter()
     count = size = 0
 
     def echo_rate():
-        now = time()
-        while bithorde:
-            start_count = proc_count
-            start_time = now
-            eventlet.sleep(2)
-            now = time()
-            processed = proc_count - start_count
-            time_passed = now - start_time
-            print "Processed/second: ", (processed/time_passed)
+        print "Processed/second: ", (proc_count.read_and_reset()/2)
     if verbose:
-        eventlet.spawn(echo_rate)
+        RepeatingTimer(2, echo_rate)
 
     crit = {'xt': db.ANY}
     for asset, status_ok in cachedAssetLiveChecker(bithorde, DB.query(crit), db=DB, force=all_objects):
-        proc_count += 1
+        proc_count.inc()
         if not status_ok:
             continue
 

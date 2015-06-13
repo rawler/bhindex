@@ -4,7 +4,7 @@ from uuid import uuid4
 from time import time
 from types import GeneratorType
 
-import eventlet
+import concurrent
 from bithorde import parseHashIds, message
 from db import ValueSet
 
@@ -20,13 +20,37 @@ class DelayedAction(object):
 
     def schedule(self, delay):
         if self._scheduled is None:
-            self._scheduled = eventlet.spawn_after(delay, self._fire)
+            self._scheduled = concurrent.spawn_after(delay, self._fire)
 
     def _fire(self):
         self._scheduled = None
         self.action()
 
 ASSET_WAIT_FACTOR = 0.01
+def testDelayedAction():
+    class Ctr:
+        def __init__(self):
+            self.x = 0
+        def inc(self):
+            self.x += 1
+
+    def test():
+        ctr = Ctr()
+        a = DelayedAction(ctr.inc)
+        a.schedule(0.00)
+        a.schedule(0.00)
+        concurrent.sleep(0.000)
+        assert ctr.x == 1
+
+    test()
+    try:
+        import eventlet
+        eventlet.disabled = True
+        reload(concurrent)
+        test()
+    except ImportError:
+        pass
+
 def hasValidStatus(dbAsset, t=time()):
     try:
         dbStatus = dbAsset['bh_status']
@@ -50,7 +74,7 @@ def cachedAssetLiveChecker(bithorde, assets, db=None, force=False):
         if not force:
             dbStatus = hasValidStatus(dbAsset, t)
             if dbStatus is not None:
-                eventlet.sleep() # Not sleeping here could starve other greenlets
+                concurrent.cede() # Not sleeping here could starve other greenlets
                 return dbAsset, dbStatus
 
         ids = parseHashIds(dbAsset['xt'])
@@ -96,14 +120,14 @@ class Progress(Counter):
     def __init__(self, total, unit=''):
         Counter.__init__(self)
         self.total = total
-        self.printer = eventlet.spawn(self.run)
+        self.printer = concurrent.spawn(self.run)
         self.unit = unit
 
     def run(self):
         start_time = last_time = time()
         last_processed = int(self)
         while int(self) < self.total:
-            eventlet.sleep(1)
+            concurrent.sleep(1)
             current_time = time()
             time_diff = time()-last_time
             processed_diff = int(self) - last_processed
@@ -165,3 +189,20 @@ def timed(method):
         return result
 
     return timed
+
+class RepeatingTimer(object):
+    def __init__(self, interval, code):
+        self.running = True
+        self.running = concurrent.spawn(self._run, interval, code)
+
+    def _run(self, interval, code):
+        now = time()
+        next = now + interval
+        while self.running:
+            concurrent.sleep(next-now)
+            code()
+            now = time()
+            next = max(now, next + interval)
+
+    def cancel(self):
+        self.running = None
