@@ -4,8 +4,8 @@ import db, config, sys, logging
 import sync_pb2
 from cStringIO import StringIO
 
-import eventlet
-from eventlet.green import socket
+import concurrent
+from concurrent import socket
 from google.protobuf.message import Message
 from google.protobuf.internal.encoder import MessageEncoder
 
@@ -152,7 +152,7 @@ class SyncConnection(object):
         for chunk in self.read_chunked():
             with self._db.transaction():
                 self._process_update_chunk(chunk)
-            eventlet.sleep()
+            concurrent.cede()
 
     def db_push(self):
         last_serial = self._last_serial_sent
@@ -176,10 +176,10 @@ class SyncServer(object):
         self.port = port
         self.connections = dict()
         self.connectAddresses = connectAddresses
-        self._sock = eventlet.listen(('0.0.0.0', port))
-        self._server = eventlet.spawn(eventlet.serve, self._sock, self._spawn)
-        self._pusher = eventlet.spawn(self._db_push)
-        self._connector = eventlet.spawn(self._connector)
+        self._sock = concurrent.listen(('0.0.0.0', port))
+        self._server = concurrent.spawn(concurrent.serve, self._sock, self._spawn)
+        self._pusher = concurrent.spawn(self._db_push)
+        self._connector = concurrent.spawn(self._connector)
 
     def _connectPeer(self, conn, connectAddress=None):
         peername = conn.peername
@@ -239,16 +239,16 @@ class SyncServer(object):
     def _connector(self):
         def _connect(addr):
             try:
-                return addr, eventlet.connect(addr)
+                return addr, concurrent.connect(addr)
             except Exception:
                 return addr, None
 
-        connectPool = eventlet.GreenPool(20)
+        connectPool = concurrent.Pool(20)
         while True:
             for address, sock in connectPool.imap(_connect, set(self.connectAddresses)):
                 if sock:
-                    eventlet.spawn(self._spawn, sock, address, connectAddress=address)
-            eventlet.greenthread.sleep(30)
+                    concurrent.spawn(self._spawn, sock, address, connectAddress=address)
+            concurrent.sleep(30)
 
     def _db_push(self):
         while True:
@@ -263,7 +263,7 @@ class SyncServer(object):
                         logging.exception("%s push hit error", conn.peername)
                         self.connections.pop(conn.peername, None)
                         conn.shutdown()
-            eventlet.greenthread.sleep(0.5)
+            concurrent.sleep(0.5)
 
     def wait(self):
         self._server.wait()
