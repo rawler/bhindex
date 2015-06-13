@@ -40,17 +40,18 @@ def hasValidStatus(dbAsset, t=time()):
     else:
         return None
 
-def cachedAssetLiveChecker(bithorde, assets, db=None):
+def cachedAssetLiveChecker(bithorde, assets, db=None, force=False):
     t = time()
     dirty = Counter()
     if db:
         commit_pending = DelayedAction(db.commit)
 
     def checkAsset(dbAsset):
-        dbStatus = hasValidStatus(dbAsset, t)
-        if dbStatus is not None:
-            eventlet.sleep() # Not sleeping here could starve other greenlets
-            return dbAsset, dbStatus
+        if not force:
+            dbStatus = hasValidStatus(dbAsset, t)
+            if dbStatus is not None:
+                eventlet.sleep() # Not sleeping here could starve other greenlets
+                return dbAsset, dbStatus
 
         ids = parseHashIds(dbAsset['xt'])
         if not ids:
