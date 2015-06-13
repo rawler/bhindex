@@ -18,8 +18,7 @@ import itertools
 
 from util import hasValidStatus, timed
 
-from bithorde.eventlet import Client, parseConfig
-from bithorde import parseHashIds, message
+from bithorde import Client, parseConfig, parseHashIds, message
 
 log = logging.getLogger()
 

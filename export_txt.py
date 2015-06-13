@@ -5,10 +5,8 @@ import json, os, os.path as path, shutil, sys
 from ConfigParser import ConfigParser
 import subprocess
 
-from bithorde.eventlet import Client, parseConfig
+from bithorde import Client, parseConfig
 from util import cachedAssetLiveChecker, Counter, Progress
-
-import eventlet
 
 HERE = path.dirname(__file__)
 sys.path.append(HERE)

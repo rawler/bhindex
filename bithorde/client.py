@@ -6,13 +6,13 @@ from collections import deque
 
 from .protocol import decodeMessage, encodeMessage, message
 
-import eventlet
+import concurrent
 
 logger = logging.getLogger(__name__)
 
 class Connection:
     def __init__(self, tgt, name=None):
-        if isinstance(tgt, eventlet.greenio.GreenSocket):
+        if hasattr(tgt, 'recv'):
             self._socket = tgt
         else:
             self._connect(tgt)
@@ -29,7 +29,7 @@ class Connection:
             family = socket.AF_INET
         else:
             family = socket.AF_UNIX
-        self._socket = eventlet.connect(tgt, family)
+        self._socket = concurrent.connect(tgt, family)
 
     def send(self, msg):
         msgbuf = encodeMessage(msg)
@@ -81,7 +81,7 @@ class Asset:
         self._client = client
         self._handle = handle
         self._status = None
-        self._statusWatch = eventlet.event.Event()
+        self._statusWatch = concurrent.Event()
         self._pendingReads = dict()
 
     def close(self):
@@ -103,7 +103,7 @@ class Asset:
             if not self._client:
                 return None
 
-            with eventlet.Timeout((self._client.config['asset_timeout'] / 1000.0)+50, False):
+            with concurrent.Timeout((self._client.config['asset_timeout']+100) / 1000.0, False):
                 return self._statusWatch.wait()
 
             logger.debug("Status() timeout on %s:%d", self._client, self._handle)
@@ -128,16 +128,25 @@ class Asset:
         return response and response.content
 
 class Client:
-    def __init__(self, config):
+    def __init__(self, config, autoconnect=True):
         self.config = config
         self._assets = {}
         self._handleAllocator = _Allocator()
-        self._pool = eventlet.GreenPool(config['pressure'])
-        self._connection = Connection(config['address'], config.get('myname', 'bhindex'))
-        self._reader = eventlet.spawn(self._reader)
 
         self._reqIdAllocator = _Allocator()
         self._pendingReads = dict()
+
+        self._pool = concurrent.Pool(config['pressure'])
+
+        if autoconnect:
+            self.connect()
+
+    def connect(self, address=None):
+        config = self.config
+        if not address:
+            address = config['address']
+        self._connection = Connection(address, config.get('myname', 'bhindex'))
+        self._reader_greenlet = concurrent.spawn(self._reader)
 
     def __repr__(self):
         return "Client(peername=%s)" % self._connection.peername
@@ -155,14 +164,14 @@ class Client:
         reqId = self._reqIdAllocator.alloc()
         try:
             request.reqId = reqId
-            respond = eventlet.event.Event()
+            respond = concurrent.Event()
             self._pendingReads[reqId] = respond
             self._connection.send(request)
             timeout = (request.timeout + 250) / 1000.0
 
             while not response and retries < 3:
                 retries += 1
-                with eventlet.Timeout(timeout, False):
+                with concurrent.Timeout(timeout, False):
                     response = respond.wait()
         finally:
             del self._pendingReads[reqId]
@@ -211,7 +220,7 @@ class Client:
             event = self._pendingReads[response.reqId]
             self._pendingReads[response.reqId] = None
         except KeyError:
-            logger.warn("Ignoring unrecognized %s ReadResponse", response)
+            logger.warn("Ignoring unrecognized %s ReadResponse", str(response)[:1024])
             return
         if event:
             event.send(response)

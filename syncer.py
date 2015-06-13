@@ -152,7 +152,7 @@ class SyncConnection(object):
         for chunk in self.read_chunked():
             with self._db.transaction():
                 self._process_update_chunk(chunk)
-            concurrent.cede()
+            concurrent.sleep()
 
     def db_push(self):
         last_serial = self._last_serial_sent

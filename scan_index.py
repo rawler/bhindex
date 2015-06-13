@@ -6,7 +6,7 @@ from ConfigParser import ConfigParser
 from optparse import OptionParser
 import subprocess
 
-from bithorde.eventlet import Client, parseConfig
+from bithorde import Client, parseConfig
 from util import cachedAssetLiveChecker, RepeatingTimer
 
 HERE = path.dirname(__file__)
