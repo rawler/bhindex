@@ -3,7 +3,6 @@
 
 import json, os, os.path as path, shutil, sys
 from ConfigParser import ConfigParser
-import subprocess
 
 from bithorde import Client, parseConfig
 from util import cachedAssetLiveChecker, Counter, Progress

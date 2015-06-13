@@ -13,7 +13,7 @@ try:
     from eventlet import GreenPool as Pool
     from eventlet import connect, listen, serve
     from eventlet.event import Event
-    from eventlet.green import socket
+    from eventlet.green import socket, subprocess
     from eventlet.hubs import trampoline
     from eventlet.timeout import Timeout
 
@@ -24,7 +24,7 @@ try:
             pass
 
 except ImportError:
-    import ctypes, socket, sys, threading, traceback, weakref
+    import ctypes, socket, sys, subprocess, threading, traceback, weakref
     from time import sleep as _sleep, time
 
     from multiprocessing.pool import ThreadPool

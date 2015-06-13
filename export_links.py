@@ -4,7 +4,6 @@
 import os, os.path as path, sys
 from ConfigParser import ConfigParser
 from optparse import OptionParser
-import subprocess
 from time import time
 
 from bithorde import Client, parseConfig
