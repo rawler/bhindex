@@ -4,21 +4,21 @@ from __future__ import division, print_function, absolute_import
 
 import atexit, os, sys, warnings
 
-import fusell
 import errno
-import stat
-import os.path as path
-from time import time
-from types import GeneratorType
-import sqlite3
-import logging
-from collections import defaultdict
-
 import itertools
+import logging
+import os.path as path
+import sqlite3
+import stat
 
-from bhindex.util import hasValidStatus, timed
+from collections import defaultdict
+from time import time
 
 from bithorde import Client, parseConfig, parseHashIds, message
+from concurrent import Pool
+from bhindex.util import hasValidStatus, timed
+
+import fusell
 
 log = logging.getLogger()
 
@@ -92,31 +92,6 @@ class INode(object):
 
         return attr
 
-class Timed:
-    def __init__(self, tag):
-        self.tag = tag
-
-    def __enter__(self):
-        self.start = time()
-        return self
-
-    def __exit__(self, type, value, traceback):
-        delta = (time() - self.start) * 1000
-        log.debug("<%s>: %.1fms" % (self.tag, delta))
-
-def timed(method):
-    def timed(*args, **kw):
-        with Timed("%r (%r, %r)" % (method.__name__, args, kw)):
-            res = method(*args, **kw)
-            if isinstance(res, GeneratorType):
-                return list(res)
-            else:
-                return res
-
-        return result
-
-    return timed
-
 import db, config
 config = config.read()
 DB=db.open(config.get('DB', 'file'))
@@ -151,7 +126,6 @@ def map_objects(objs):
             return File(objs[0])
     else:
         return Directory(objs)
-
 
 class File(INode):
     def __init__(self, obj):
@@ -245,7 +219,6 @@ class Operations(fusell.FUSELL):
         except KeyError:
             raise(fusell.FUSEError(errno.ENOENT))
 
-    @timed
     def lookup(self, inode_p, name):
         inode_p = self._inode_resolve(inode_p, Directory)
         inode = inode_p.lookup(name.decode('utf-8'))
@@ -267,7 +240,6 @@ class Operations(fusell.FUSELL):
         inode = self._inode_resolve(inode, Directory)
         return inode.ino
 
-    @timed
     def readdir(self, inode, off):
         if off:
             return
@@ -283,7 +255,6 @@ class Operations(fusell.FUSELL):
     def releasedir(self, inode):
         pass
 
-    @timed
     def open(self, inode, flags):
         inode = self._inode_resolve(inode, File)
         supported_flags = os.O_RDONLY | os.O_LARGEFILE
@@ -296,7 +267,6 @@ class Operations(fusell.FUSELL):
         self.files[fh] = asset
         return fh
 
-    @timed
     def read(self, fh, off, size):
         try:
             f = self.files[fh]
@@ -321,7 +291,6 @@ class Operations(fusell.FUSELL):
         stat.f_blocks = stat.f_bfree = stat.f_bavail = 0
         stat.f_files  = stat.f_ffree = stat.f_favail = 0
         return stat
-
 
 def init_logging():
     formatter = logging.Formatter('%(message)s')

@@ -102,6 +102,9 @@ class Object(object):
     def iteritems(self):
         return self._dict.iteritems()
 
+    def keys(self):
+        return self._dict.keys()
+
     def matches(self, criteria):
         for key, value in criteria.iteritems():
             if key not in self._dict:
