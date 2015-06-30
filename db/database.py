@@ -1,5 +1,7 @@
+import contextlib
 from time import time
 
+import concurrent
 import sqlite3
 
 from obj import Object, ValueSet
@@ -72,19 +74,24 @@ class DB(object):
         self.cursor = self.conn.cursor()
         create_DB(self.conn)
         self.__idCache = dict()
+        self.lock = concurrent.ThreadLock()
 
+    @contextlib.contextmanager
     def transaction(self):
-        return self.conn
+        with self.lock, self.conn:
+            yield
 
     def _query_all(self, query, args):
-        c = self.conn.cursor()
-        c.execute(query, args)
-        return c.fetchall()
+        with self.lock:
+            c = self.conn.cursor()
+            c.execute(query, args)
+            return c.fetchall()
 
     def _query_first(self, query, args):
-        c = self.cursor
-        c.execute(query, args)
-        return c.fetchone()
+        with self.lock:
+            c = self.cursor
+            c.execute(query, args)
+            return c.fetchone()
 
     def _query_single(self, query, args=[], default=None):
         res = self._query_first(query, args)
@@ -96,8 +103,9 @@ class DB(object):
     def _getId(self, tbl, id):
         objid = self._query_single("SELECT %sid FROM %s WHERE %s = ?" % (tbl, tbl, tbl), (id,))
         if not objid:
-            self.cursor.execute("INSERT OR IGNORE INTO %s (%s) VALUES (?)" % (tbl, tbl), (id,))
-            objid = self._query_single("SELECT %sid FROM %s WHERE %s = ?" % (tbl, tbl, tbl), (id,))
+            with self.lock:
+                self.cursor.execute("INSERT OR IGNORE INTO %s (%s) VALUES (?)" % (tbl, tbl), (id,))
+                objid = self._query_single("SELECT %sid FROM %s WHERE %s = ?" % (tbl, tbl, tbl), (id,))
         return objid
 
     def _getCachedId(self, tbl, id):
@@ -169,7 +177,8 @@ class DB(object):
         if listid:
             return listid
         newlistid = (self._query_single("SELECT MAX(listid) FROM list") or 0) + 1
-        self.conn.cursor().executemany("INSERT INTO list (listid, value) VALUES (?, ?)", [(newlistid, value) for value in values])
+        with self.lock:
+            self.conn.cursor().executemany("INSERT INTO list (listid, value) VALUES (?, ?)", [(newlistid, value) for value in values])
         return newlistid
 
     def get_mtime(self, objid):
@@ -228,29 +237,32 @@ class DB(object):
         _dict = obj._dict
         objid = self._getId('obj', obj.id)
 
-        cursor = self.conn.cursor()
-        for key in obj._dirty:
-            values = _dict[key]
-            keyid = self._getCachedId('key', key)
-            old_timestamp = self._query_single("SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
-            if not old_timestamp or values.t > old_timestamp:
-                listid = self.insert_list(values)
-                cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
-                                    VALUES (?, ?, ?, ?)""",
-                                    (objid, keyid, _dict[key].t, listid))
+        with self.lock:
+            cursor = self.conn.cursor()
+            for key in obj._dirty:
+                values = _dict[key]
+                keyid = self._getCachedId('key', key)
+                old_timestamp = self._query_single("SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
+                if not old_timestamp or values.t > old_timestamp:
+                    listid = self.insert_list(values)
+                    cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
+                                        VALUES (?, ?, ?, ?)""",
+                                        (objid, keyid, _dict[key].t, listid))
         obj._dirty.clear()
 
     def commit(self):
-        self.conn.commit()
+        with self.lock:
+            self.conn.commit()
 
     def vacuum(self):
-        for x, in self._query_all("SELECT DISTINCT list.listid FROM list LEFT JOIN map ON (map.listid = list.listid) WHERE map.listid IS NULL", ()):
-            self.conn.execute("DELETE FROM list WHERE listid = ?", (x,))
-        for x, in self._query_all("SELECT DISTINCT key.keyid FROM key LEFT JOIN map ON (key.keyid = map.keyid) WHERE map.keyid IS NULL", ()):
-            self.conn.execute("DELETE FROM key WHERE key.keyid = ?", (x,))
-        for x, in self._query_all("SELECT DISTINCT obj.objid FROM obj LEFT JOIN map ON (obj.objid = map.objid) WHERE map.objid IS NULL", ()):
-            self.conn.execute("DELETE FROM obj WHERE obj.objid = ?", (x,))
-        self.conn.execute("VACUUM")
+        with self.lock:
+            for x, in self._query_all("SELECT DISTINCT list.listid FROM list LEFT JOIN map ON (map.listid = list.listid) WHERE map.listid IS NULL", ()):
+                self.conn.execute("DELETE FROM list WHERE listid = ?", (x,))
+            for x, in self._query_all("SELECT DISTINCT key.keyid FROM key LEFT JOIN map ON (key.keyid = map.keyid) WHERE map.keyid IS NULL", ()):
+                self.conn.execute("DELETE FROM key WHERE key.keyid = ?", (x,))
+            for x, in self._query_all("SELECT DISTINCT obj.objid FROM obj LEFT JOIN map ON (obj.objid = map.objid) WHERE map.objid IS NULL", ()):
+                self.conn.execute("DELETE FROM obj WHERE obj.objid = ?", (x,))
+            self.conn.execute("VACUUM")
 
     def get_public_mappings_after(self, serial=0, limit=1024):
         for obj, key, tstamp, serial, listid in self._query_all("SELECT obj, key, timestamp, serial, listid FROM map NATURAL JOIN key NATURAL JOIN obj WHERE serial > ? AND NOT key LIKE '@%' ORDER BY serial LIMIT ?", (serial, limit)):
@@ -266,4 +278,5 @@ class DB(object):
         }
 
     def set_sync_state(self, peername, last_received):
-        self.conn.cursor().execute("INSERT OR REPLACE INTO sync_state (peername, last_received) VALUES (?, ?)", (peername, last_received))
+        with self.lock:
+            self.conn.cursor().execute("INSERT OR REPLACE INTO sync_state (peername, last_received) VALUES (?, ?)", (peername, last_received))

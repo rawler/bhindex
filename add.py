@@ -4,7 +4,7 @@
 import os, os.path as path, sys
 from ConfigParser import NoOptionError
 from time import time
-import subprocess
+from concurrent import subprocess
 
 HERE = path.dirname(__file__)
 sys.path.append(HERE)

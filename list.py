@@ -4,7 +4,6 @@
 import os, os.path as path, sys, time
 from ConfigParser import ConfigParser
 from optparse import OptionParser
-import subprocess
 
 HERE = path.dirname(__file__)
 sys.path.append(HERE)

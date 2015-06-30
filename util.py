@@ -2,8 +2,9 @@ import codecs, logging, sys
 from base64 import urlsafe_b64encode as b64encode
 from uuid import uuid4
 from time import time
+from types import GeneratorType
 
-import eventlet
+import concurrent
 from bithorde import parseHashIds, message
 from db import ValueSet
 
@@ -19,13 +20,37 @@ class DelayedAction(object):
 
     def schedule(self, delay):
         if self._scheduled is None:
-            self._scheduled = eventlet.spawn_after(delay, self._fire)
+            self._scheduled = concurrent.spawn_after(delay, self._fire)
 
     def _fire(self):
         self._scheduled = None
         self.action()
 
 ASSET_WAIT_FACTOR = 0.01
+def testDelayedAction():
+    class Ctr:
+        def __init__(self):
+            self.x = 0
+        def inc(self):
+            self.x += 1
+
+    def test():
+        ctr = Ctr()
+        a = DelayedAction(ctr.inc)
+        a.schedule(0.00)
+        a.schedule(0.00)
+        concurrent.sleep(0.000)
+        assert ctr.x == 1
+
+    test()
+    try:
+        import eventlet
+        eventlet.disabled = True
+        reload(concurrent)
+        test()
+    except ImportError:
+        pass
+
 def hasValidStatus(dbAsset, t=time()):
     try:
         dbStatus = dbAsset['bh_status']
@@ -39,17 +64,18 @@ def hasValidStatus(dbAsset, t=time()):
     else:
         return None
 
-def cachedAssetLiveChecker(bithorde, assets, db=None):
+def cachedAssetLiveChecker(bithorde, assets, db=None, force=False):
     t = time()
     dirty = Counter()
     if db:
         commit_pending = DelayedAction(db.commit)
 
     def checkAsset(dbAsset):
-        dbStatus = hasValidStatus(dbAsset, t)
-        if dbStatus is not None:
-            eventlet.sleep() # Not sleeping here could starve other greenlets
-            return dbAsset, dbStatus
+        if not force:
+            dbStatus = hasValidStatus(dbAsset, t)
+            if dbStatus is not None:
+                concurrent.sleep() # Not sleeping here could starve other greenlets
+                return dbAsset, dbStatus
 
         ids = parseHashIds(dbAsset['xt'])
         if not ids:
@@ -94,14 +120,14 @@ class Progress(Counter):
     def __init__(self, total, unit=''):
         Counter.__init__(self)
         self.total = total
-        self.printer = eventlet.spawn(self.run)
+        self.printer = concurrent.spawn(self.run)
         self.unit = unit
 
     def run(self):
         start_time = last_time = time()
         last_processed = int(self)
         while int(self) < self.total:
-            eventlet.sleep(1)
+            concurrent.sleep(1)
             current_time = time()
             time_diff = time()-last_time
             processed_diff = int(self) - last_processed
@@ -136,3 +162,47 @@ def make_directory(db, directory, t):
     for segment in directory:
         dir_id = get_folder_id(db, dir_id, segment, t)
     return dir_id
+
+
+class Timed:
+    def __init__(self, tag):
+        self.tag = tag
+        self.log = logging.getLogger('timed')
+
+    def __enter__(self):
+        self.start = time()
+        return self
+
+    def __exit__(self, type, value, traceback):
+        delta = (time() - self.start) * 1000
+        self.log.debug("<%s>: %.1fms" % (self.tag, delta))
+
+def timed(method):
+    def timed(*args, **kw):
+        with Timed("%r (%r, %r)" % (method.__name__, args, kw)):
+            res = method(*args, **kw)
+            if isinstance(res, GeneratorType):
+                return list(res)
+            else:
+                return res
+
+        return result
+
+    return timed
+
+class RepeatingTimer(object):
+    def __init__(self, interval, code):
+        self.running = True
+        self.running = concurrent.spawn(self._run, interval, code)
+
+    def _run(self, interval, code):
+        now = time()
+        next = now + interval
+        while self.running:
+            concurrent.sleep(next-now)
+            code()
+            now = time()
+            next = max(now, next + interval)
+
+    def cancel(self):
+        self.running = None

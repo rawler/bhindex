@@ -5,7 +5,7 @@ import codecs, os, os.path as path, sys, json, urllib2
 from ConfigParser import ConfigParser
 from time import time
 
-from bithorde.eventlet import Client, parseConfig
+from bithorde import Client, parseConfig
 from util import cachedAssetLiveChecker, Counter
 
 HERE = path.dirname(__file__)

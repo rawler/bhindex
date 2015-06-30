@@ -4,10 +4,9 @@
 import os, os.path as path, sys
 from ConfigParser import ConfigParser
 from optparse import OptionParser
-import subprocess
 from time import time
 
-from bithorde.eventlet import Client, parseConfig
+from bithorde import Client, parseConfig
 from util import cachedAssetLiveChecker
 
 HERE = path.dirname(__file__)
