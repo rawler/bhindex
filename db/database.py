@@ -4,27 +4,11 @@ from time import time
 import concurrent
 import sqlite3
 
-from obj import Object, ValueSet
-from setup import create_DB
+from obj import Object, ValueSet, ANY
+from _setup import create_DB
 
-ANY = object()
 class Starts(unicode):
     pass
-
-def quote_identifier(s, errors="strict"):
-    encodable = s.encode("utf-8", errors).decode("utf-8")
-
-    nul_index = encodable.find("\x00")
-
-    if nul_index >= 0:
-        error = UnicodeEncodeError("NUL-terminated utf-8", encodable,
-                                   nul_index, nul_index + 1, "NUL not allowed")
-        error_handler = codecs.lookup_error(errors)
-        replacement, _ = error_handler(error)
-        encodable = encodable.replace("\x00", replacement)
-
-    return "\"" + encodable.replace("\"", "\"\"") + "\""
-
 
 def _sql_condition(k,v):
     equal_query = """SELECT DISTINCT objid FROM map
@@ -134,20 +118,12 @@ class DB(object):
     def __getitem__(self, obj):
         return self.get(obj)
 
-    def get_attr(self, objid, attr):
-        row = self._query_first("SELECT timestamp, listid FROM map NATURAL JOIN key NATURAL JOIN obj WHERE obj = ? AND key = ?", (objid, attr))
-        if row:
-            timestamp, listid = row
-            return ValueSet(v=(x for x, in self._query_all("SELECT value FROM list WHERE listid = ?", (listid,))), t=timestamp)
-        else:
-            return None
-
     def update_attr(self, objid, key, values):
         objid = self._getId('obj', objid)
         keyid = self._getCachedId('key', key)
         tstamp = self._query_single("SELECT timestamp FROM map WHERE objid = ? AND keyid = ?", (objid, keyid))
         if values.t > tstamp:
-            newlistid = self.insert_list(values)
+            newlistid = self._insert_list(values)
             cursor = self.conn.cursor()
             cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
                             VALUES (?, ?, ?, ?)""",
@@ -157,8 +133,6 @@ class DB(object):
             return False
 
     def _get_list_id(self, values):
-        if not values:
-            return None
         _values = set(values)
         suspects = [x for (x,) in self._query_all("SELECT listid FROM list WHERE value = ?", (_values.pop(),) )]
         while _values and suspects:
@@ -170,7 +144,7 @@ class DB(object):
             if listid:
                 return listid
 
-    def insert_list(self, values):
+    def _insert_list(self, values):
         if not values:
             return None
         listid = self._get_list_id(values)
@@ -180,9 +154,6 @@ class DB(object):
         with self.lock:
             self.conn.cursor().executemany("INSERT INTO list (listid, value) VALUES (?, ?)", [(newlistid, value) for value in values])
         return newlistid
-
-    def get_mtime(self, objid):
-        return self._query_single("SELECT MAX(timestamp) FROM map NATURAL JOIN obj WHERE obj = ?", (objid,))
 
     def query_ids(self, criteria):
         query, params = _sql_for_criteria(criteria)
@@ -199,40 +170,6 @@ class DB(object):
         for objid in self.query_raw_ids(criteria):
             yield self.get(objid, fields)
 
-    def all_ids(self):
-        for objid, in self._query_all('SELECT DISTINCT obj FROM map NATURAL JOIN obj', ()):
-            yield objid
-
-    def all(self):
-        for objid in self.all_ids():
-            yield self[objid]
-
-    def list_keys(self, criteria=None):
-        '''Returns a iterator of (key, distinct values for key) for all keys in DB.'''
-        query = """SELECT key, COUNT(*)
-    FROM (SELECT key, list.value, COUNT(*) AS c
-        FROM map
-            NATURAL JOIN list
-            NATURAL JOIN key
-            %s
-        GROUP BY key, list.value)
-    GROUP BY key"""
-        if criteria:
-            q, args = _sql_for_criteria(criteria)
-            query %= "JOIN (%s) USING (objid)" % q
-        else:
-            query %= ""
-            args = ()
-
-        return sorted(self._query_all(query, args), key=lambda (k,c): c)
-
-    def list_values(self, key):
-        for x, in self._query_all("""SELECT DISTINCT value
-                FROM map NATURAL JOIN list NATURAL JOIN key
-                WHERE key = ?
-                ORDER BY value""", (key,)):
-            yield x
-
     def update(self, obj):
         _dict = obj._dict
         objid = self._getId('obj', obj.id)
@@ -244,7 +181,7 @@ class DB(object):
                 keyid = self._getCachedId('key', key)
                 old_timestamp = self._query_single("SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
                 if not old_timestamp or values.t > old_timestamp:
-                    listid = self.insert_list(values)
+                    listid = self._insert_list(values)
                     cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
                                         VALUES (?, ?, ?, ?)""",
                                         (objid, keyid, _dict[key].t, listid))

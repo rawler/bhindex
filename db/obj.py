@@ -1,5 +1,7 @@
 from time import time
 
+ANY = object()
+
 class ValueSet(set):
     def __init__(self, v, t=None):
         if isinstance(v, unicode):
@@ -8,12 +10,12 @@ class ValueSet(set):
             set.__init__(self, v)
             for x in self:
                 assert isinstance(x, unicode)
-        if not t:
+        if t is None:
             t = time()
         self.t = t
 
     def update(self, v, t=None):
-        if not t:
+        if t is None:
             t = time()
         self.t = max([t, self.t])
         set.update(self, v)
@@ -32,6 +34,7 @@ class Object(object):
         self.id = objid
         self._dirty = set()
         self._dict = dict()
+        self._deleted = dict()
         self.update(init)
 
     def update(self, other):
@@ -46,7 +49,14 @@ class Object(object):
 
     def any(self, key, default=None):
         values = self._dict.get(key)
-        return values and values.any(default)
+        if values:
+            return values.any(default)
+        else:
+            return default
+
+    def __eq__(self, other):
+        return self.id == other.id \
+           and self._dict == other._dict
 
     def __contains__(self, key):
         return key in self._dict
@@ -65,8 +75,8 @@ class Object(object):
 
         if key in self._dict:
             self._dirty.add(key)
-            self._dict[key].clear()
-            self._dict[key].t = time()
+            self._deleted[key] = time()
+            del self._dict[key]
 
     def iteritems(self):
         return self._dict.iteritems()
@@ -80,16 +90,8 @@ class Object(object):
         return True
 
     def update_key(self, key, values, t=None):
-        if not t:
-            t=time()
         if isinstance(values, unicode):
             values = set([values])
-
-        # Try to prune upcased properties
-        lkey = key.lower()
-        if lkey != key:
-            del self[key]
-            key = lkey
 
         if key in self:
             self[key].update(values, t)
@@ -97,8 +99,12 @@ class Object(object):
         else:
             self[key] = ValueSet(values, t)
 
-    def timestamp(self):
-        return max(x.t for x in self._dict.itervalues())
+    def timestamp(self, default=None):
+        timestamps = [x.t for x in self._dict.itervalues()]
+        if timestamps:
+            return max(timestamps)
+        else:
+            return default
 
     def __repr__(self):
         return repr(self._dict)
