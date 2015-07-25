@@ -97,18 +97,33 @@ class TestInRam():
 
     def test_vacuum(self):
         db, o = self.db, self.o
-        db.update_attr(o.id, 'key', ValueSet([u'key']))
+        del db[o]
         assert_is_not_none(db._get_list_id(o[u'key']))
+        assert_is_not_none(db._get_id('key', u'key'))
+        assert_is_not_none(db._get_id('obj', o.id))
         db.vacuum()
         assert_is_none(db._get_list_id(self.o[u'key']))
-
+        assert_is_not_none(db._get_id('key', u'key'))
+        assert_is_not_none(db._get_id('obj', o.id))
+        db.vacuum(0)
+        assert_is_none(db._get_list_id(self.o[u'key']))
+        assert_is_not_none(db._get_id('key', u'key'))
+        assert_is_not_none(db._get_id('obj', o.id))
 
     def test_get_public_mappings_after(self):
         items = self.db.get_public_mappings_after()
         item = next((x for x in items if x[0] == u'some_id'), None)
         assert_is_not_none(item)
-        assert_equal(self.db.last_serial(), item[3])
-        assert_false(list(self.db.get_public_mappings_after(item[3])))
+        item_serial = item[3]
+        assert_equal(self.db.last_serial(), item_serial)
+        assert_false(list(self.db.get_public_mappings_after(item_serial)))
+        del self.db[self.o]
+        items = self.db.get_public_mappings_after(item_serial)
+        del_item = next((x for x in items if x[0] == u'some_id'), None)
+        assert_equal(del_item[0], item[0])
+        assert_equal(del_item[1], item[1])
+        assert_equal(del_item[3], self.db.last_serial())
+        assert_equal(del_item[4], set([]))
 
     def test_sync_state(self):
         assert_equal(self.db.get_sync_state('my_peer'), {"last_received": 0})

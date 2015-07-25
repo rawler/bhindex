@@ -7,6 +7,9 @@ import sqlite3
 from obj import Object, ValueSet, ANY
 from _setup import create_DB
 
+# Pointers to empty list will be wiped after 30 days.
+DEFAULT_GRACE=3600*24*30
+
 class Starts(unicode):
     pass
 
@@ -84,7 +87,7 @@ class DB(object):
         else:
             return default
 
-    def _getId(self, tbl, id):
+    def _get_id(self, tbl, id):
         objid = self._query_single("SELECT %sid FROM %s WHERE %s = ?" % (tbl, tbl, tbl), (id,))
         if not objid:
             with self.lock:
@@ -96,7 +99,7 @@ class DB(object):
         try:
             return self.__idCache[(tbl, id)]
         except KeyError:
-            id = self._getId(tbl, id)
+            id = self._get_id(tbl, id)
             self.__idCache[(tbl, id)] = id
             return id
 
@@ -118,8 +121,14 @@ class DB(object):
     def __getitem__(self, obj):
         return self.get(obj)
 
+    def __delitem__(self, obj):
+        objid = self._get_id('obj', obj.id)
+        t = time()
+        self.conn.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
+                            SELECT objid, keyid, ?, NULL FROM map WHERE objid = ?""", (t, objid))
+
     def update_attr(self, objid, key, values):
-        objid = self._getId('obj', objid)
+        objid = self._get_id('obj', objid)
         keyid = self._getCachedId('key', key)
         tstamp = self._query_single("SELECT timestamp FROM map WHERE objid = ? AND keyid = ?", (objid, keyid))
         if values.t > tstamp:
@@ -172,7 +181,7 @@ class DB(object):
 
     def update(self, obj):
         _dict = obj._dict
-        objid = self._getId('obj', obj.id)
+        objid = self._get_id('obj', obj.id)
 
         with self.lock:
             cursor = self.conn.cursor()
@@ -191,8 +200,10 @@ class DB(object):
         with self.lock:
             self.conn.commit()
 
-    def vacuum(self):
+    def vacuum(self, delete_grace=DEFAULT_GRACE):
         with self.lock:
+            if delete_grace is not None:
+                self.conn.execute("DELETE FROM map WHERE timestamp < ? AND listid IS NULL", (time()-delete_grace,))
             for x, in self._query_all("SELECT DISTINCT list.listid FROM list LEFT JOIN map ON (map.listid = list.listid) WHERE map.listid IS NULL", ()):
                 self.conn.execute("DELETE FROM list WHERE listid = ?", (x,))
             for x, in self._query_all("SELECT DISTINCT key.keyid FROM key LEFT JOIN map ON (key.keyid = map.keyid) WHERE map.keyid IS NULL", ()):
