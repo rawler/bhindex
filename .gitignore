@@ -11,3 +11,7 @@
 
 # Ignore test-directory for links
 /bhlinks
+
+# Python coverage
+/.coverage
+/cover
