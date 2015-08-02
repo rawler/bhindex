@@ -217,31 +217,31 @@ DESCRIPTOR.message_types_by_name['Stream'] = _STREAM
 class Hello(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _HELLO
-  
+
   # @@protoc_insertion_point(class_scope:bhindex.sync.Hello)
 
 class Setup(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _SETUP
-  
+
   # @@protoc_insertion_point(class_scope:bhindex.sync.Setup)
 
 class Update(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _UPDATE
-  
+
   # @@protoc_insertion_point(class_scope:bhindex.sync.Update)
 
 class Checkpoint(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _CHECKPOINT
-  
+
   # @@protoc_insertion_point(class_scope:bhindex.sync.Checkpoint)
 
 class Stream(message.Message):
   __metaclass__ = reflection.GeneratedProtocolMessageType
   DESCRIPTOR = _STREAM
-  
+
   # @@protoc_insertion_point(class_scope:bhindex.sync.Stream)
 
 # @@protoc_insertion_point(module_scope)
