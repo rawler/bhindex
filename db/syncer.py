@@ -38,30 +38,31 @@ class SyncConnection(object):
 
     def handshake(self):
         assert not self.peername
-        self._sendmsg(['hello', sync_pb2.Hello(name=self.name)])
-        peerhello = self.read_msg()
-        self.peername = peerhello.name
-        self._last_serial_received = self._db.get_sync_state(self.peername)['last_received']
-        self._sendmsg(['setup', sync_pb2.Setup(
-            last_serial_received=self._last_serial_received,
-            last_serial_in_db=self._db.last_serial(),
-        )])
+        with self._db.transaction():
+            self._sendmsg(['hello', sync_pb2.Hello(name=self.name)])
+            peerhello = self.read_msg()
+            self.peername = peerhello.name
+            self._last_serial_received = self._db.get_sync_state(self.peername)['last_received']
+            self._sendmsg(['setup', sync_pb2.Setup(
+                last_serial_received=self._last_serial_received,
+                last_serial_in_db=self._db.last_serial(),
+            )])
 
-        self._log = logging.getLogger(self.peername)
+            self._log = logging.getLogger(self.peername)
 
-        peersetup = self.read_msg()
-        if peersetup.last_serial_received <= self._db.last_serial():
-            self._last_serial_sent = peersetup.last_serial_received
-        else:
-            self._log.warn("detecting local db was reset")
-            self._last_serial_sent = 0
+            peersetup = self.read_msg()
+            if peersetup.last_serial_received <= self._db.last_serial():
+                self._last_serial_sent = peersetup.last_serial_received
+            else:
+                self._log.warn("detecting local db was reset")
+                self._last_serial_sent = 0
 
-        if peersetup.last_serial_in_db < self._last_serial_received:
-            self._log.warn("detecting remote db was reset")
-            self._last_serial_received = 0
+            if peersetup.last_serial_in_db < self._last_serial_received:
+                self._log.warn("detecting remote db was reset")
+                self._last_serial_received = 0
 
-        self._log.info("%s is requesting from my #%d (is %d behind) ", self.peername, self._last_serial_sent, self._db.last_serial() - self._last_serial_sent)
-        self._log.info("%s is currently at #%d (I'm %d behind)", self.peername, peersetup.last_serial_in_db, peersetup.last_serial_in_db - self._last_serial_received)
+            self._log.info("%s is requesting from my #%d (is %d behind) ", self.peername, self._last_serial_sent, self._db.last_serial() - self._last_serial_sent)
+            self._log.info("%s is currently at #%d (I'm %d behind)", self.peername, peersetup.last_serial_in_db, peersetup.last_serial_in_db - self._last_serial_received)
 
         return self
 
@@ -70,9 +71,11 @@ class SyncConnection(object):
             return
         buf = StringIO()
         enc = MESSAGE_ENCODER(buf.write)
+        res = 0
         for field, msg in msg_groups:
-            enc(field, msg)
+            res += enc(field, msg)
         self._sock.sendall(buf.getvalue())
+        return res
 
     def _read_and_queue(self):
         try:
@@ -80,27 +83,28 @@ class SyncConnection(object):
         except IOError, e:
             self._log.info("Failed to receive: errno: %s (%s)", e.errno, e.strerror)
             self.close()
-            raise StopIteration
+            return False
 
         if res:
             self._msg_queue(res)
+            return True
         else:
             self.close()
-            raise StopIteration
+            return False
 
-    def read_chunked(self):
-        while True:
+    def read_chunk(self):
+        chunk = self._msg_queue.clear()
+        while (not chunk) and self._read_and_queue():
             chunk = self._msg_queue.clear()
-            if chunk:
-                yield chunk
-            self._read_and_queue()
+        return chunk
 
     def read_msg(self):
         while True:
             try:
                 return self._msg_queue.pop()
             except IndexError:
-                self._read_and_queue()
+                if not self._read_and_queue():
+                    return None
 
     def shutdown(self):
         if self._sock:
@@ -111,7 +115,10 @@ class SyncConnection(object):
             self._sock.close()
             self._sock = None
 
-    def _process_update_chunk(self, chunk):
+    def closed(self):
+        return self._sock is None
+
+    def _process_updates(self, chunk):
         chunk_applied = 0
         chunk_had = 0
         last_serial = self._last_serial_received
@@ -125,7 +132,7 @@ class SyncConnection(object):
             elif isinstance(msg, sync_pb2.Checkpoint):
                 last_serial = max(last_serial, msg.serial)
             else:
-                raise "Unknown message"
+                raise TypeError("Unknown message")
 
         if chunk_had:
             self._log.debug("Commit %d/%d", chunk_applied, chunk_had)
@@ -134,10 +141,17 @@ class SyncConnection(object):
             self._last_serial_received = last_serial
             self._db.set_sync_state(self.peername, last_received=self._last_serial_received)
 
-    def run(self):
-        for chunk in self.read_chunked():
+    def _step(self):
+        chunk = self.read_chunk()
+        if chunk:
             with self._db.transaction():
-                self._process_update_chunk(chunk)
+                self._process_updates(chunk)
+            return True
+        else:
+            return False
+
+    def run(self):
+        while self._step():
             concurrent.sleep()
 
     def db_push(self):
@@ -154,6 +168,7 @@ class SyncConnection(object):
             msg_groups.append(['checkpoint', sync_pb2.Checkpoint(serial=last_serial)])
         self._sendmsg(*msg_groups)
         self._last_serial_sent = last_serial
+
 
 class Syncer(object):
     def __init__(self, db, name, port, connectAddresses, db_poll_interval=0.5):
