@@ -8,6 +8,9 @@ try:
     import eventlet
     if getattr(eventlet, 'disabled', False):
         raise ImportError
+    from os import environ
+    if environ.get('CONCURRENT_EVENTLET') == '0':
+        raise ImportError
 
     from eventlet import sleep, spawn, spawn_after
     from eventlet import GreenPool as Pool
