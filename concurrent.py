@@ -96,8 +96,19 @@ except ImportError:
             raise SystemError("PyThreadState_SetAsyncExc failed")
 
     class Thread(threading.Thread):
+        def __init__(self, target, args, kwargs, *_args, **_kwargs):
+            self.target = target
+            self.args = args
+            self.kwargs = kwargs
+            super(Thread, self).__init__(*_args, target=target, args=args, kwargs=kwargs, **_kwargs)
+
         def wait(self):
-            return self.join()
+            self.join()
+            try:
+                traceback.print_exception(*self.result)
+            except:
+                pass
+            return self.result
 
         def kill(self, excobj=SystemExit):
             assert self.isAlive(), "thread must be started"
@@ -105,6 +116,13 @@ except ImportError:
                 if tobj is self:
                     _async_raise(tid, excobj)
                     return
+
+        def run(self):
+            try:
+                print(self)
+                self.result = self.target(*self.args, **self.kwargs)
+            except:
+                self.result = sys.exc_info()
 
     class Timeout(threading.Thread):
         def __init__(self, duration, excobj = None):
