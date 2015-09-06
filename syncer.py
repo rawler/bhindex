@@ -31,12 +31,12 @@ if __name__ == '__main__':
 
     config = config.read()
     sync_config = config.items('LIVESYNC')
-    connectAddresses = set(parse_addr(addr)
-                           for addr in sync_config['connect'].split(","))
+    connect_addresses = set(parse_addr(addr)
+                            for addr in sync_config['connect'].split(","))
     sync_config = {
         'name': sync_config['name'],
         'port': int(sync_config['port']),
-        'connectAddresses': connectAddresses,
+        'connect_addresses': connect_addresses,
         'db_poll_interval': float(sync_config['db_poll_interval']),
     }
     Syncer(db=db.open(config.get('DB', 'file'), sync=options.sync), **sync_config).wait()

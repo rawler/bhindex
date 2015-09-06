@@ -1,6 +1,7 @@
 import logging
 from cStringIO import StringIO
 from obj import ValueSet
+from uuid import uuid4 as uuid
 
 import concurrent
 from concurrent import socket
@@ -8,15 +9,26 @@ from concurrent import socket
 from db.serialize import MESSAGE_DECODER, MESSAGE_ENCODER, MessageQueue
 from db import sync_pb2
 
+from time import time
+
 FORMAT = "%(levelname)-8s %(asctime)-15s <%(name)s> %(message)s"
+HANDSHAKE_TIMEOUT = 5
 logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
 
+class Deadline(object):
+    def __init__(self, timeout):
+        self.value = timeout and time() + timeout
+
+    def timeleft(self):
+        return self.value and self.value - time()
+
+
 class SyncConnection(object):
-    def __init__(self, db, name, sock):
-        self._sock = sock
-        self._db = db
+    def __init__(self, db, name, sock, uuid):
+        self.db = db
         self.name = name
+        self._sock = sock
         self._msg_queue = MessageQueue(MESSAGE_DECODER)
         self._echo_prevention = set()
         self._log = logging.getLogger('[anon]')
@@ -38,20 +50,24 @@ class SyncConnection(object):
 
     def handshake(self):
         assert not self.peername
-        with self._db.transaction():
+        with self.db.transaction():
             self._sendmsg(['hello', sync_pb2.Hello(name=self.name)])
-            peerhello = self.read_msg()
+            peerhello = self.read_msg(timeout=HANDSHAKE_TIMEOUT)
+            if not peerhello:
+                raise StopIteration
             self.peername = peerhello.name
-            self._last_serial_received = self._db.get_sync_state(self.peername)['last_received']
+            self._last_serial_received = self.db.get_sync_state(self.peername)['last_received']
             self._sendmsg(['setup', sync_pb2.Setup(
                 last_serial_received=self._last_serial_received,
-                last_serial_in_db=self._db.last_serial(),
+                last_serial_in_db=self.db.last_serial(),
             )])
 
             self._log = logging.getLogger(self.peername)
 
-            peersetup = self.read_msg()
-            if peersetup.last_serial_received <= self._db.last_serial():
+            peersetup = self.read_msg(timeout=HANDSHAKE_TIMEOUT)
+            if not peersetup:
+                raise StopIteration
+            if peersetup.last_serial_received <= self.db.last_serial():
                 self._last_serial_sent = peersetup.last_serial_received
             else:
                 self._log.warn("detecting local db was reset")
@@ -61,7 +77,7 @@ class SyncConnection(object):
                 self._log.warn("detecting remote db was reset")
                 self._last_serial_received = 0
 
-            self._log.info("%s is requesting from my #%d (is %d behind) ", self.peername, self._last_serial_sent, self._db.last_serial() - self._last_serial_sent)
+            self._log.info("%s is requesting from my #%d (is %d behind) ", self.peername, self._last_serial_sent, self.db.last_serial() - self._last_serial_sent)
             self._log.info("%s is currently at #%d (I'm %d behind)", self.peername, peersetup.last_serial_in_db, peersetup.last_serial_in_db - self._last_serial_received)
 
         return self
@@ -77,18 +93,21 @@ class SyncConnection(object):
         self._sock.sendall(buf.getvalue())
         return res
 
-    def _read_and_queue(self):
+    def _read_and_queue(self, timeout=None):
         try:
-            res = self._sock and self._sock.recv(64*1024)
+            sock = self._sock
+            if not sock:
+                return False
+
+            sock.settimeout(timeout)
+            if self._msg_queue(sock.recv(64*1024)):
+                return True
+            else:
+                self.close()
+                return False
+
         except IOError, e:
             self._log.info("Failed to receive: errno: %s (%s)", e.errno, e.strerror)
-            self.close()
-            return False
-
-        if res:
-            self._msg_queue(res)
-            return True
-        else:
             self.close()
             return False
 
@@ -98,12 +117,13 @@ class SyncConnection(object):
             chunk = self._msg_queue.clear()
         return chunk
 
-    def read_msg(self):
+    def read_msg(self, timeout=None):
+        deadline = Deadline(timeout)
         while True:
             try:
                 return self._msg_queue.pop()
             except IndexError:
-                if not self._read_and_queue():
+                if not self._read_and_queue(timeout=deadline.timeleft()):
                     return None
 
     def shutdown(self):
@@ -112,6 +132,7 @@ class SyncConnection(object):
 
     def close(self):
         if self._sock:
+            self.shutdown()
             self._sock.close()
             self._sock = None
 
@@ -125,7 +146,7 @@ class SyncConnection(object):
         for msg in chunk:
             if isinstance(msg, sync_pb2.Update):
                 chunk_had += 1
-                serial = self._db.update_attr(msg.obj, msg.key, ValueSet(msg.values, t=msg.tstamp))
+                serial = self.db.update_attr(msg.obj, msg.key, ValueSet(msg.values, t=msg.tstamp))
                 if serial:
                     self._echo_prevention.add(serial)
                     chunk_applied += 1
@@ -139,12 +160,12 @@ class SyncConnection(object):
         if self._last_serial_received != last_serial:
             self._log.debug("Checkpoint %d", last_serial)
             self._last_serial_received = last_serial
-            self._db.set_sync_state(self.peername, last_received=self._last_serial_received)
+            self.db.set_sync_state(self.peername, last_received=self._last_serial_received)
 
     def _step(self):
         chunk = self.read_chunk()
         if chunk:
-            with self._db.transaction():
+            with self.db.transaction():
                 self._process_updates(chunk)
             return True
         else:
@@ -157,7 +178,7 @@ class SyncConnection(object):
     def db_push(self):
         last_serial = self._last_serial_sent
         msgs = list()
-        for obj, key, tstamp, serial, values in self._db.get_public_mappings_after(last_serial):
+        for obj, key, tstamp, serial, values in self.db.get_public_mappings_after(last_serial):
             if serial in self._echo_prevention:
                 self._echo_prevention.discard(serial)
             else:
@@ -170,67 +191,30 @@ class SyncConnection(object):
         self._last_serial_sent = last_serial
 
 
-class Syncer(object):
-    def __init__(self, db, name, port, connectAddresses, db_poll_interval=0.5):
-        self._db = db
-        self.name = name
-        self.port = port
+class _P2PSession(object):
+    def __init__(self):
+        self.uuid = None
+
+
+class P2P(object):
+    def __init__(self, listen, handler, connect_addresses=set(), connect_interval=30):
+        if isinstance(listen, int):
+            listen = ('0.0.0.0', listen)
+        self.uuid = uuid()
+        self.handler = handler
         self.connections = dict()
-        self.connectAddresses = connectAddresses
-        self._sock = concurrent.listen(('0.0.0.0', port))
-        self._server = concurrent.spawn(concurrent.serve, self._sock, self._spawn)
-        self._pusher = concurrent.spawn(self._db_push)
-        self._connector = concurrent.spawn(self._connector)
+        self.connect_interval = connect_interval
+        self._connectAddresses = dict((addr, True) for addr in connect_addresses)
+        self._sock = concurrent.listen(listen)
+        self._server = concurrent.spawn(concurrent.serve, self._sock, self._connectionWrapper)
+        self._connectThread = concurrent.spawn(self._connector)
 
-    def _connectPeer(self, conn, connectAddress=None):
-        peername = conn.peername
-        connected = self.connections.get(peername, None)
-        if connected: # Was already connected
-            if connectAddress and not getattr(connected, 'connectAddress', None):
-                connected.connectAddress = connectAddress
-                self.connectAddresses.discard(connectAddress)
-            return None
-        else:
-            conn.connectAddress = connectAddress
-            self.connectAddresses.discard(connectAddress)
-            self.connections[peername] = conn
-            return conn
+    def add_address(self, addr):
+        if addr not in self._connectAddresses:
+            self._connectAddresses[addr] = True
 
-    def _disconnectPeer(self, conn):
-        self.connections.pop(conn.peername, None)
-        connectAddress = getattr(conn, 'connectAddress', None)
-        if connectAddress:
-            self.connectAddresses.add(connectAddress)
-
-    def _spawn(self, sock, client_addr, connectAddress=None):
-        with SyncConnection(self._db, self.name, sock) as conn:
-            try:
-                logging.debug("Handshaking for sock %s with connectAddress %s", sock, connectAddress or 'Unknown')
-                with self._db.transaction():
-                    conn.handshake()
-            except StopIteration:
-                logging.debug("Handshake ended prematurely for %s with connectAddress %s", sock, connectAddress or 'Unknown')
-                return
-            except Exception:
-                logging.exception("Handshake failed for sock %s with connectAddress %s", sock, connectAddress or 'Unknown')
-                return
-
-            peername = conn.peername
-            if client_addr == connectAddress:
-                logging.info('connected to %s %s', peername, client_addr)
-            else:
-                logging.info('%s connected from %s', peername, client_addr)
-            if not self._connectPeer(conn, connectAddress):
-                logging.info('%s already connected. Dropping.',  peername)
-                return
-
-            try:
-                conn.run()
-            except Exception:
-                logging.exception("%s died", peername)
-
-            logging.info('%s disconnected from %s', conn.peername, client_addr)
-            self._disconnectPeer(conn)
+    def remove_address(self, addr):
+        self._connectAddresses[addr] = None
 
     def _connector(self):
         def _connect(addr):
@@ -240,14 +224,92 @@ class Syncer(object):
                 return addr, None
 
         connectPool = concurrent.Pool(20)
-        while True:
-            for address, sock in connectPool.imap(_connect, set(self.connectAddresses)):
+        while self._sock:
+            connections = set(self.connections.keys())
+            addresses = [addr for addr, uuid in self._connectAddresses.iteritems() if uuid and (uuid not in connections)]
+            for address, sock in connectPool.imap(_connect, addresses):
                 if sock:
-                    concurrent.spawn(self._spawn, sock, address, connectAddress=address)
-            concurrent.sleep(30)
+                    self._connectAddresses[address] = False
+                    concurrent.spawn(self._connectionWrapper, sock, address, address)
+            concurrent.sleep(self.connect_interval)
 
-    def _db_push(self):
-        while True:
+    def _connectionWrapper(self, sock, client_address, connectAddress=None):
+        if connectAddress:
+            logging.debug("Connection established to %s", sock.getpeername())
+        else:
+            logging.debug("Connection established from %s", sock.getpeername())
+        session = _P2PSession()
+
+        def set_session(uuid, s):
+            if connectAddress in self._connectAddresses:
+                self._connectAddresses[connectAddress] = uuid
+            connected = self.connections.get(uuid, None)
+            if connected:  # Was already connected
+                return None
+            else:
+                session.uuid = uuid
+                self.connections[uuid] = s
+                return sock
+
+        try:
+            self.handler(sock, set_session)
+        finally:
+            if session.uuid:
+                self.connections.pop(session.uuid, None)
+
+    def local_addr(self):
+        return self._sock.getsockname()
+
+    def wait(self):
+        self._server.wait()
+        self._connectThread.wait()
+
+    def close(self):
+        if self._sock:
+            self._sock.close()
+            self._sock = None
+        for connection in self.connections.itervalues():
+            connection.close()
+        self.wait()
+
+
+class Syncer(P2P):
+    def __init__(self, db, name, port, connect_addresses=set(), db_poll_interval=5, connect_interval=30):
+        self._db = db
+        self.name = name
+        super(Syncer, self).__init__(port, self._spawn, connect_addresses, connect_interval)
+        self.running = True
+        self._pusher = concurrent.spawn(self._db_push, db_poll_interval)
+
+    def _spawn(self, sock, set_session):
+        peer = sock.getpeername()
+        with SyncConnection(self._db, self.name, sock, self.uuid) as conn:
+            try:
+                logging.debug("Handshaking with remote address %s", peer)
+                with self._db.transaction():
+                    conn.handshake()
+            except StopIteration:
+                logging.debug("Handshake ended prematurely with %s", peer)
+                return
+            except Exception:
+                logging.exception("Handshake failed with %s", peer)
+                return
+
+            peername = conn.peername
+            logging.info("connection established with %s (%s)", peername, peer)
+            if not set_session(peername, conn):
+                logging.info('%s already connected. Dropping.',  peername)
+                return
+
+            try:
+                conn.run()
+            except Exception:
+                logging.exception("%s died", peername)
+
+            logging.info('%s disconnected from %s', conn.peername, peer)
+
+    def _db_push(self, db_poll_interval):
+        while self.running:
             with self._db.transaction():
                 for conn in self.connections.values():
                     try:
@@ -259,9 +321,12 @@ class Syncer(object):
                         logging.exception("%s push hit error", conn.peername)
                         self.connections.pop(conn.peername, None)
                         conn.shutdown()
-            concurrent.sleep(0.5)
+            concurrent.sleep(db_poll_interval)
+
+    def close(self):
+        self.running = False
+        super(Syncer, self).close()
 
     def wait(self):
-        self._server.wait()
+        super(Syncer, self).wait()
         self._pusher.wait()
-        self._connector.wait()

@@ -74,6 +74,7 @@ class MessageQueue(object):
 
     def __call__(self, data):
         self._write(data)
+        return len(data)
 
     def pop(self):
         return self._queue.popleft()
