@@ -14,7 +14,7 @@ try:
 
     from eventlet import sleep, spawn, spawn_after
     from eventlet import GreenPool as Pool
-    from eventlet import connect, listen, serve
+    from eventlet import connect, listen
     from eventlet.event import Event
     from eventlet.green import socket, subprocess
     from eventlet.hubs import trampoline
@@ -26,8 +26,15 @@ try:
         def __exit__(self, exc_type, exc_value, traceback):
             pass
 
+    def serve(sock, handler):
+        try:
+            return eventlet.serve(sock, handler)
+        except socket.error:
+            pass
+
 except ImportError:
     import ctypes, socket, sys, subprocess, threading, traceback, weakref
+    from errno import EBADF, errorcode
     from time import sleep as _sleep, time
 
     from multiprocessing.pool import ThreadPool
@@ -102,12 +109,14 @@ except ImportError:
             self.kwargs = kwargs
             super(Thread, self).__init__(*_args, target=target, args=args, kwargs=kwargs, **_kwargs)
 
-        def wait(self):
-            self.join()
+        def _print_exc(self):
             try:
                 traceback.print_exception(*self.result)
             except:
                 pass
+
+        def wait(self):
+            self.join()
             return self.result
 
         def kill(self, excobj=SystemExit):
@@ -119,13 +128,13 @@ except ImportError:
 
         def run(self):
             try:
-                print(self)
                 self.result = self.target(*self.args, **self.kwargs)
             except:
                 self.result = sys.exc_info()
+                self._print_exc()
 
     class Timeout(threading.Thread):
-        def __init__(self, duration, excobj = None):
+        def __init__(self, duration, excobj=None):
             threading.Thread.__init__(self)
             self.duration = duration
             self.excobj = excobj or self
@@ -141,6 +150,7 @@ except ImportError:
             else:
                 tl.timeouts = [self.deadline]
             return self
+
         def __exit__(self, exc_type, exc_value, traceback):
             deadline = tl.timeouts.pop()
             assert deadline == self.deadline
@@ -163,9 +173,27 @@ except ImportError:
         t.start()
         return t
 
+    class _socket(socket.socket):
+        def __init__(self, *args, **kwargs):
+            self.accepting = False
+            super(_socket, self).__init__(*args, **kwargs)
+
+        def listen(self, backlog):
+            self.accepting = True
+            super(_socket, self).listen(backlog)
+
+        def close(self):
+            if self.accepting:
+                self.accepting = False
+                try:
+                    connect(self.getsockname())
+                except:
+                    pass
+            super(_socket, self).close()
+
     def connect(address, family=socket.AF_INET, bind=None):
         if family in (socket.AF_INET, socket.AF_INET6, socket.AF_UNIX):
-            s = socket.socket(family, socket.SOCK_STREAM)
+            s = _socket(family, socket.SOCK_STREAM)
             if bind:
                 s.bind(bind)
             s.connect(address)
@@ -173,17 +201,21 @@ except ImportError:
         else:
             raise ValueError("Unknown address type")
 
-    def listen(address):
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    def listen(address, backlog=5):
+        s = _socket(socket.AF_INET, socket.SOCK_STREAM, )
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(address)
-        s.listen(5)
+        s.listen(backlog)
         return s
 
     def serve(sock, handler):
-        while True:
-            conn, addr = sock.accept()
-            spawn(handler, conn, addr)
+        try:
+            while sock.accepting:
+                conn, addr = sock.accept()
+                if sock.accepting:
+                    spawn(handler, conn, addr)
+        except socket.error:
+            pass
 
     def trampoline(fd, *args, **kwargs):
         'Not applicable without eventloop'
