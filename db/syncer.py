@@ -208,6 +208,7 @@ class P2P(object):
         self._sock = concurrent.listen(listen)
         self._server = concurrent.spawn(concurrent.serve, self._sock, self._connectionWrapper)
         self._connectThread = concurrent.spawn(self._connector)
+        logging.getLogger('syncer').info("Listening on %s", listen)
 
     def add_address(self, addr):
         if addr not in self._connectAddresses:
