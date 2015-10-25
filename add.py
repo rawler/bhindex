@@ -9,7 +9,7 @@ from concurrent import subprocess
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config, export_txt, export_links, magnet, scraper
+import db, config, export_links, magnet, scraper
 from util import make_directory
 
 config = config.read()
@@ -58,7 +58,7 @@ if __name__ == '__main__':
                       help="When done, don't immediately export links to links-directory")
     parser.add_option("-T", "--no-txt", action="store_false",
                       dest="export_txt", default=True,
-                      help="When done, don't immediately publish txt-format index")
+                      help="DEPRECATED. Txt-export is no longer supported")
     parser.add_option("-t", "--tag", action="append", dest="tags",
                       help="Define a tag for these uploads, such as '-tname:monkey'")
     parser.add_option("-s", "--strip-path", action="store_const", dest="sanitizer",
@@ -175,6 +175,4 @@ if __name__ == '__main__':
 
     if options.export_links and export_links.LINKDIR and do_export == True:
        export_links.main()
-    if options.export_txt and export_txt.TXTPATH and do_export == True:
-       export_txt.main()
 
