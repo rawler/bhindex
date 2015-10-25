@@ -39,7 +39,7 @@ def wait_for(condition, timeout=1):
 
 class TestSyncConnection():
     def setup(self):
-        self.obj = Object(u'some_obj', {u'apa': ValueSet(u'banan')})
+        self.obj = Object(u'some_obj', {u'apa': ValueSet(u'banan', t=0)})
 
         self.db1 = DB(':memory:')
         self.db2 = DB(':memory:')
@@ -120,6 +120,38 @@ class TestSyncConnection():
         self.syncer1.db_push()
         self.syncer1.close()
         self.syncer2.run()
+
+        self.assert_equal(self.obj.id)
+
+    def test_attribute_deletion(self):
+        self.handshake()
+
+        self.obj[u'deleted'] = ValueSet([u"Something"], t=445)
+        self.db1.update(self.obj)
+        self.syncer1.db_push()
+        self.syncer2._step()
+
+        self.assert_equal(self.obj.id)
+
+        del self.obj[u'deleted']
+        self.db1.update(self.obj)
+        self.syncer1.db_push()
+        self.syncer2._step()
+
+        self.assert_equal(self.obj.id)
+
+    def test_object_deletion(self):
+        self.handshake()
+
+        self.db1.update(self.obj)
+        self.syncer1.db_push()
+        self.syncer2._step()
+
+        self.assert_equal(self.obj.id)
+
+        del self.db1[self.obj]
+        self.syncer1.db_push()
+        self.syncer2._step()
 
         self.assert_equal(self.obj.id)
 

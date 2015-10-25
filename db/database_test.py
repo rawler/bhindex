@@ -37,7 +37,7 @@ class TestInRam():
     def setup(self):
         self.db = db = DB(':memory:')
         self.o = o = db.get('some_id')
-        o[u'key'] = ValueSet([u'Test Person', u'And alternatives'])
+        o[u'key'] = ValueSet([u'Test Person', u'And alternatives'], t=0)
         db.update(o)
 
     def test_simple_object_put_get(self):
@@ -84,7 +84,7 @@ class TestInRam():
         self.o[u'key'] = ValueSet([])
         self.db.update(self.o)
         o = self.db.get(self.o.id)
-        assert_false(o[u'key'])
+        assert_not_in(u'key', o)
 
     def test_update_attr(self):
         db, o = self.db, self.o
@@ -94,6 +94,21 @@ class TestInRam():
         assert_equal(db.get(o.id)[u'key'], ValueSet([u'apa']))
         db.update_attr(o.id, 'key', ValueSet(o[u'key']))
         assert_equal(db.get(o.id)[u'key'], o[u'key'])
+
+    def test_del_attr(self):
+        db, o1 = self.db, self.o
+        db.update_attr(o1.id, 'deleted', ValueSet([u'apa'], t=0))
+        o2 = db.get(o1.id)
+        assert_equal(o2[u'deleted'], ValueSet([u'apa']))
+        del o2[u'deleted']
+        db.update(o2)
+        assert_equal(db.get(o1.id), o1)
+
+    def test_del_obj(self):
+        db, o = self.db, self.o
+
+        del db[o]
+        assert_equal(db[o.id], Object(o.id))
 
     def test_vacuum(self):
         db, o = self.db, self.o
@@ -129,5 +144,3 @@ class TestInRam():
         assert_equal(self.db.get_sync_state('my_peer'), {"last_received": 0})
         self.db.set_sync_state('my_peer', 2)
         assert_equal(self.db.get_sync_state('my_peer'), {"last_received": 2})
-
-

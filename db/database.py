@@ -127,17 +127,18 @@ class DB(object):
         if fields is not None:
             query += " AND key IN (" + ', '.join(('?',) * len(fields)) + ")"
         for key, timestamp, listid in self._query_all(query, (objid,) + tuple(fields or ())):
-            values = ValueSet(v=(x for x, in self._query_all(
+            if listid is None:
+                continue
+            obj._dict[key] = ValueSet(v=(x for x, in self._query_all(
                 "SELECT value FROM list WHERE listid = ?", (listid,))), t=timestamp)
-            obj._dict[key] = values
         return obj
 
     def __getitem__(self, obj):
         return self.get(obj)
 
     def __delitem__(self, obj):
-
-        objid = self._get_id('obj', obj.id)
+        object_id = getattr(obj, 'id', obj)
+        objid = self._get_id('obj', object_id)
         t = time()
         with self.lock:
             self.conn.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
@@ -210,7 +211,9 @@ class DB(object):
         with self.lock:
             cursor = self.conn.cursor()
             for key in obj._dirty:
-                values = _dict[key]
+                values = _dict.get(key, None)
+                if values is None:
+                    values = ValueSet([], t=obj._deleted[key])
                 keyid = self._getCachedId('key', key)
                 old_timestamp = self._query_single(
                     "SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
@@ -218,7 +221,7 @@ class DB(object):
                     listid = self._insert_list(values)
                     cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
                                         VALUES (?, ?, ?, ?)""",
-                                   (objid, keyid, _dict[key].t, listid))
+                                   (objid, keyid, values.t, listid))
         obj._dirty.clear()
 
     def commit(self):
