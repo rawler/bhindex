@@ -8,9 +8,9 @@ import concurrent
 from bithorde import parseHashIds, message
 from db import ValueSet
 
-if not sys.stdout.encoding:
+if getattr(sys.stdout, 'encoding', 'UNDEFINED') is None:
     sys.stdout = codecs.getwriter('utf8')(sys.stdout)
-if not sys.stderr.encoding:
+if getattr(sys.stderr, 'encoding', 'UNDEFINED') is None:
     sys.stderr = codecs.getwriter('utf8')(sys.stderr)
 
 class DelayedAction(object):
@@ -27,29 +27,6 @@ class DelayedAction(object):
         self.action()
 
 ASSET_WAIT_FACTOR = 0.01
-def testDelayedAction():
-    class Ctr:
-        def __init__(self):
-            self.x = 0
-        def inc(self):
-            self.x += 1
-
-    def test():
-        ctr = Ctr()
-        a = DelayedAction(ctr.inc)
-        a.schedule(0.00)
-        a.schedule(0.00)
-        concurrent.sleep(0.000)
-        assert ctr.x == 1
-
-    test()
-    try:
-        import eventlet
-        eventlet.disabled = True
-        reload(concurrent)
-        test()
-    except ImportError:
-        pass
 
 def hasValidStatus(dbAsset, t=time()):
     try:
