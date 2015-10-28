@@ -168,6 +168,9 @@ if __name__ == '__main__':
     finally:
            DB.commit()
 
-    if options.export_links and export_links.LINKDIR and do_export == True:
-       export_links.main()
+    if options.export_links and do_export == True:
+        from bhindex import links
+        from bithorde import Client, parseConfig
 
+        bithorde = Client(parseConfig(config.items('BITHORDE')))
+        links.export(DB, bithorde)
