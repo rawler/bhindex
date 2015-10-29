@@ -128,7 +128,10 @@ class SyncConnection(object):
 
     def shutdown(self):
         if self._sock:
-            self._sock.shutdown(socket.SHUT_WR)
+            try:
+                self._sock.shutdown(socket.SHUT_WR)
+            except socket.error:
+                pass
 
     def close(self):
         if self._sock:
