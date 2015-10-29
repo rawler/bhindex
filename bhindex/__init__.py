@@ -1,4 +1,4 @@
-from . import links, syncer
+from . import links, syncer, vacuum
 
 
 def main(args):
@@ -12,6 +12,9 @@ def main(args):
 
     Syncer = subparsers.add_parser('syncer', help='Runs online synchronization with other bhindex')
     syncer.prepare_args(Syncer)
+
+    Vacuum = subparsers.add_parser('vacuum', help='Runs routine DB-maintenance')
+    vacuum.prepare_args(Vacuum)
 
     args = CLI.parse_args(args)
     try:
