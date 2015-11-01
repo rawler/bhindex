@@ -59,8 +59,11 @@ def test_DBExporter():
     path = u'apa/movie'
     xt = u'tree:tiger:ASDASDSADASDASDSADASDASDSADASDASDSADASD'
     db = DB(':memory:')
+    db.update(Object(u"dir:apa", {
+        u'directory': ValueSet(u"dir:/apa"),
+    }))
     db.update(Object('some_file', {
-        u'path': ValueSet(path),
+        u'directory': ValueSet(u"dir:apa/movie"),
         u'xt': ValueSet(xt),
     }))
 

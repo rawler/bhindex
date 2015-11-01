@@ -223,6 +223,7 @@ class DB(object):
                                         VALUES (?, ?, ?, ?)""",
                                    (objid, keyid, values.t, listid))
         obj._dirty.clear()
+        return obj
 
     def commit(self):
         with self.lock:

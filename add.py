@@ -10,7 +10,7 @@ HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
 import db, config, export_links, magnet
-from util import make_directory
+from bhindex.tree import make_directory
 
 config = config.read()
 
@@ -144,7 +144,7 @@ if __name__ == '__main__':
                     add(line.strip(), options.tags)
             else:
                 if os.path.isdir(arg):
-                   if options.recursive == True:
+                   if options.recursive:
                       fileList = []
                       for root, subFolders, files in os.walk(arg):
                           subFolders[:] = [d for d in subFolders if not d.startswith('.')] # Remove dotted dirs.

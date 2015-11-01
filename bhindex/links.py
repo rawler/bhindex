@@ -8,6 +8,8 @@ from db import ANY, DB, ValueSet
 from bithorde import Client, parseConfig
 from util import cachedAssetLiveChecker
 
+from .tree import Filesystem
+
 import config
 config = config.read()
 
@@ -93,18 +95,19 @@ class FilteredExporter(object):
 class DBExporter(object):
     def __init__(self, db, bithorde, tgt):
         self.db = db
+        self.fs = Filesystem(db)
         self.bithorde = bithorde
         self.tgt = tgt
 
     def write_links(self, obj):
         tgt = magnet.fromDbObject(obj)
-        return all(self.tgt(p, tgt) for p in obj['path'])
+        return all(self.tgt("/".join(p), tgt) for p in self.fs.paths_for(obj))
 
     def export(self, force_all):
         t = time()
         count = size = 0
 
-        crit = {'path': ANY, 'xt': ANY}
+        crit = {'directory': ANY, 'xt': ANY}
         if not force_all:
             crit['@linked'] = None
         objs = self.db.query(crit)

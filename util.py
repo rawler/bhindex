@@ -118,29 +118,6 @@ class Progress(Counter):
     def wait(self):
         return self.printer.wait()
 
-def get_folder_id(db, parent_id, name, t):
-    directory_attr = u'%s/%s' % (parent_id, name)
-    folders = list(db.query_ids({u'directory': directory_attr}))
-    if folders:
-        if len(folders) > 1:
-            logging.basicConfig()
-            log = logging.getLogger('util')
-            log.warning("Duplicate folders for %s: %r", directory_attr, folders)
-        return folders[0]
-    else:
-        folder_id = u'dir:%s' % b64encode(uuid4().bytes).strip('=')
-        folder = db[folder_id]
-        folder[u'directory'] = ValueSet((directory_attr,), t=t)
-        db.update(folder)
-        return folder_id
-
-def make_directory(db, directory, t):
-    dir_id = u"dir:"
-    for segment in directory:
-        dir_id = get_folder_id(db, dir_id, segment, t)
-    return dir_id
-
-
 class Timed:
     def __init__(self, tag):
         self.tag = tag
