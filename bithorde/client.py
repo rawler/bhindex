@@ -18,7 +18,6 @@ class Connection:
             self._connect(tgt)
         self.buf = ""
         self.auth(name)
-        self.peername = ""
 
     host_port_re = re.compile(r"\s*(\S+):(\d+)\s*")
     def _connect(self, tgt):
