@@ -17,11 +17,22 @@ class ValueSet(set):
             t = time()
         self.t = t
 
-    def update(self, v, t=None):
+    def _touch(self, t):
         if t is None:
             t = time()
-        self.t = max([t, self.t])
-        set.update(self, v)
+        self.t = max((t, self.t))
+
+    def add(self, value, t=None):
+        self._touch(t)
+        super(ValueSet, self).add(value)
+
+    def discard(self, value, t=None):
+        self._touch(t)
+        super(ValueSet, self).discard(value)
+
+    def update(self, v, t=None):
+        self._touch(t)
+        super(ValueSet, self).update(self, v)
 
     def any(self, default=None):
         for x in self:
