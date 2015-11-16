@@ -1,6 +1,9 @@
+from base64 import urlsafe_b64encode as b64encode
 from time import time
+from uuid import uuid4
 
 ANY = object()
+
 
 class ValueSet(set):
     def __init__(self, v, t=None):
@@ -29,6 +32,7 @@ class ValueSet(set):
         return unicode(sep).join(self)
     __unicode__ = __str__ = join
 
+
 class Object(object):
     def __init__(self, objid, init={}):
         self.id = objid
@@ -37,8 +41,15 @@ class Object(object):
         self._deleted = dict()
         self.update(init)
 
+    @classmethod
+    def new(cls, prefix=None):
+        id = b64encode(uuid4().bytes).strip('=')
+        if prefix is not None:
+            id = '%s:%s' % (prefix, id)
+        return cls(id)
+
     def update(self, other):
-        for k,v in other.iteritems():
+        for k, v in other.iteritems():
             self[k] = v
 
     def __getitem__(self, key):

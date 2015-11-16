@@ -38,7 +38,10 @@ def test_ValueSet_update():
     vs.update([], t+5)
     assert_equals(int(vs.t), t+5)
 
-
+def test_Object_new():
+    assert_regexp_matches(Object.new().id, r'[A-Za-z0-9-\-\_]{22}'),
+    assert_regexp_matches(Object.new('').id, r':[A-Za-z0-9-\-\_]{22}'),
+    assert_regexp_matches(Object.new('dir').id, r'dir:[A-Za-z0-9-\-\_]{22}'),
 
 @raises(TypeError)
 def test_Object_void_ctor():
