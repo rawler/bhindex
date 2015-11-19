@@ -217,7 +217,7 @@ class DB(object):
                 keyid = self._getCachedId('key', key)
                 old_timestamp = self._query_single(
                     "SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
-                if not old_timestamp or values.t > old_timestamp:
+                if not old_timestamp or values.t >= old_timestamp:
                     listid = self._insert_list(values)
                     cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
                                         VALUES (?, ?, ?, ?)""",

@@ -6,6 +6,7 @@ from nose.tools import *
 from db.obj import ValueSet, Object
 from db.database import DB, Starts, ANY
 
+
 class TempDir:
     def __init__(self):
         self.name = mkdtemp()
@@ -15,6 +16,7 @@ class TempDir:
 
     def __exit__(self, type, value, tb):
         rmtree(self.name)
+
 
 def test_DB_file_backed():
     with TempDir() as d:
@@ -33,11 +35,12 @@ def test_DB_file_backed():
         obj2 = db2[u'aia']
         assert_equal(obj1[u'name'], obj2[u'name'])
 
+
 class TestInRam():
     def setup(self):
         self.db = db = DB(':memory:')
         self.o = o = db.get('some_id')
-        o[u'key'] = ValueSet([u'Test Person', u'And alternatives'], t=0)
+        o[u'key'] = ValueSet([u'Test Person', u'And alternatives'], t=1)
         db.update(o)
 
     def test_simple_object_put_get(self):
@@ -86,9 +89,14 @@ class TestInRam():
         o = self.db.get(self.o.id)
         assert_not_in(u'key', o)
 
+    def test_update_with_same_t(self):
+        self.o[u'key'] = ValueSet([u'Something completely differrent'], t=1)
+        self.db.update(self.o)
+        assert_equal(self.db[self.o.id][u'key'], ValueSet([u'Something completely differrent'], t=1))
+
     def test_update_attr(self):
         db, o = self.db, self.o
-        db.update_attr(o.id, 'key', ValueSet([], t=0))
+        db.update_attr(o.id, 'key', ValueSet([], t=1))
         assert_equal(db.get(o.id), o)
         db.update_attr(o.id, 'key', ValueSet([u'apa']))
         assert_equal(db.get(o.id)[u'key'], ValueSet([u'apa']))
@@ -97,7 +105,7 @@ class TestInRam():
 
     def test_del_attr(self):
         db, o1 = self.db, self.o
-        db.update_attr(o1.id, 'deleted', ValueSet([u'apa'], t=0))
+        db.update_attr(o1.id, 'deleted', ValueSet([u'apa'], t=1))
         o2 = db.get(o1.id)
         assert_equal(o2[u'deleted'], ValueSet([u'apa']))
         del o2[u'deleted']

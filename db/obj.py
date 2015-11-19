@@ -6,6 +6,8 @@ ANY = object()
 
 
 class ValueSet(set):
+    # TODO: Rethink API surrounding ValueSet. Should it really be a set, not a frozenset? Should time really be mapped here?
+
     def __init__(self, v, t=None):
         if isinstance(v, unicode):
             set.__init__(self, [v])
@@ -87,7 +89,7 @@ class Object(object):
         assert isinstance(value, ValueSet)
 
         key = key.lower()
-        if key not in self._dict or (self._dict[key] != value and value.t >= self._dict[key].t):
+        if key not in self._dict or (value.t >= self._dict[key].t):
             self._dirty.add(key)
             self._dict[key] = value
 
