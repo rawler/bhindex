@@ -1,16 +1,22 @@
 from __future__ import absolute_import
 
-import socket, re, logging
-from cStringIO import StringIO
+import logging
+import re
+import socket
 from collections import deque
+from contextlib import closing
 
 from .protocol import decodeMessage, encodeMessage, message
+from .util import fsize, read_in_chunks
 
 import concurrent
 
 logger = logging.getLogger(__name__)
 
+
 class Connection:
+    HOST_PORT_RE = re.compile(r"\s*(\S+):(\d+)\s*")
+
     def __init__(self, tgt, name=None):
         if hasattr(tgt, 'recv'):
             self._socket = tgt
@@ -19,9 +25,8 @@ class Connection:
         self.buf = ""
         self.auth(name)
 
-    host_port_re = re.compile(r"\s*(\S+):(\d+)\s*")
     def _connect(self, tgt):
-        m = self.host_port_re.match(tgt)
+        m = self.HOST_PORT_RE.match(tgt)
         if m:
             tgt = (m.group(1), int(m.group(2)))
         if isinstance(tgt, tuple):
@@ -61,6 +66,7 @@ class Connection:
         peerauth = self.next()
         self.peername = peerauth.name
 
+
 class _Allocator:
     def __init__(self):
         self._next = iter(range(1024))
@@ -75,13 +81,11 @@ class _Allocator:
     def free(self, x):
         self._freelist.append(x)
 
-class Asset:
+
+class BaseAsset(object):
     def __init__(self, client, handle):
         self._client = client
         self._handle = handle
-        self._status = None
-        self._statusWatch = concurrent.Event()
-        self._pendingReads = dict()
 
     def close(self):
         if self._handle is not None:
@@ -96,6 +100,14 @@ class Asset:
 
     def __delete__(self):
         self.close()
+
+
+class Asset(BaseAsset):
+    def __init__(self, client, handle):
+        super(Asset, self).__init__(client, handle)
+        self._status = None
+        self._statusWatch = concurrent.Event()
+        self._pendingReads = dict()
 
     def status(self):
         if self._statusWatch:
@@ -121,11 +133,46 @@ class Asset:
         assert self._client, self._handle
 
         timeout = (self._client.config['asset_timeout'] * 3)
-        request = message.Read.Request(handle = self._handle, offset=offset, size=size, timeout=timeout)
+        request = message.Read.Request(handle=self._handle, offset=offset, size=size, timeout=timeout)
 
         response = self._client._read(request)
 
         return response and response.content
+
+
+class UploadAsset(BaseAsset):
+    def __init__(self, client, handle):
+        super(UploadAsset, self).__init__(client, handle)
+        self.begin = concurrent.Event()
+        self.result = concurrent.Event()
+        self.progress = 0
+
+    def wait_for_ok(self):
+        ack = self.begin.wait()
+        if ack.status != message.SUCCESS:
+            stat = message._STATUS.values_by_number[ack.status].name
+            raise Exception("Upload start failed with %s" % stat)
+
+    def write_all(self, f):
+        offset = 0
+        for block in read_in_chunks(f, 64*1024):
+            self._client._connection.send(message.DataSegment(handle=self._handle, offset=offset, content=block))
+            offset += len(block)
+
+    def wait_for_result(self):
+        result = self.result.wait()
+        if result.status != message.SUCCESS:
+            stat = message._STATUS.values_by_number[result.status].name
+            raise Exception("Upload start failed with %s" % stat)
+        return result.ids
+
+    def _processStatus(self, status):
+        self.progress = status.availability
+        if not self.begin.ready():
+            self.begin.send(status)
+        elif status.ids or status.status != message.SUCCESS:
+            self.result.send(status)
+
 
 class Client:
     def __init__(self, config, autoconnect=True):
@@ -157,6 +204,27 @@ class Client:
         self._assets[handle] = asset
         self._connection.send(message.BindRead(handle=handle, ids=hashIds, timeout=self.config['asset_timeout']))
         return asset
+
+    def _prepare_upload(self):
+        handle = self._handleAllocator.alloc()
+        asset = UploadAsset(self, handle)
+        self._assets[handle] = asset
+        return asset
+
+    def upload(self, f):
+        if isinstance(f, basestring):
+            f = open(f, 'rb')
+        with closing(f), self._prepare_upload() as asset:
+            self._connection.send(message.BindWrite(handle=asset._handle, size=fsize(f)))
+            asset.wait_for_ok()
+            asset.write_all(f)
+            return asset.wait_for_result()
+
+    def link(self, path):
+        with self._prepare_upload() as asset:
+            self._connection.send(message.BindWrite(handle=asset._handle, linkpath=path))
+            asset.wait_for_ok()
+            return asset.wait_for_result()
 
     def _read(self, request):
         response = None
