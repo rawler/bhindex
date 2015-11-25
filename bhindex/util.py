@@ -1,8 +1,9 @@
-import codecs, logging, sys
-from base64 import urlsafe_b64encode as b64encode
-from uuid import uuid4
+import codecs
+import logging
+import sys
 from time import time
 from types import GeneratorType
+from warnings import warn
 
 import concurrent
 from bithorde import parseHashIds, message
@@ -12,6 +13,7 @@ if getattr(sys.stdout, 'encoding', 'UNDEFINED') is None:
     sys.stdout = codecs.getwriter('utf8')(sys.stdout)
 if getattr(sys.stderr, 'encoding', 'UNDEFINED') is None:
     sys.stderr = codecs.getwriter('utf8')(sys.stderr)
+
 
 class DelayedAction(object):
     def __init__(self, action):
@@ -28,10 +30,11 @@ class DelayedAction(object):
 
 ASSET_WAIT_FACTOR = 0.01
 
-def hasValidStatus(dbAsset, t=time()):
+
+def hasValidStatus(obj, t=time()):
     try:
-        dbStatus = dbAsset['bh_status']
-        dbConfirmedStatus = dbAsset['bh_status_confirmed']
+        dbStatus = obj['bh_status']
+        dbConfirmedStatus = obj['bh_status_confirmed']
     except KeyError:
         return None
     stable = dbConfirmedStatus.t - dbStatus.t
@@ -41,82 +44,41 @@ def hasValidStatus(dbAsset, t=time()):
     else:
         return None
 
-def cachedAssetLiveChecker(bithorde, assets, db=None, force=False):
+
+def cachedAssetLiveChecker(bithorde, objs, db=None, force=False):
     t = time()
-    dirty = Counter()
     if db:
         commit_pending = DelayedAction(db.commit)
 
-    def checkAsset(dbAsset):
+    def checkAsset(obj):
         if not force:
-            dbStatus = hasValidStatus(dbAsset, t)
+            dbStatus = hasValidStatus(obj, t)
             if dbStatus is not None:
-                concurrent.sleep() # Not sleeping here could starve other greenlets
-                return dbAsset, dbStatus
+                concurrent.sleep()  # Not sleeping here could starve other greenlets
+                return obj, dbStatus
 
-        ids = parseHashIds(dbAsset['xt'])
+        ids = parseHashIds(obj['xt'])
         if not ids:
-            return dbAsset, None
+            return obj, None
 
         with bithorde.open(ids) as bhAsset:
             status = bhAsset.status()
             status_ok = status and status.status == message.SUCCESS
-            dbAsset[u'bh_status'] = ValueSet((unicode(status_ok),), t=t)
-            dbAsset[u'bh_status_confirmed'] = ValueSet((unicode(t),), t=t)
+            obj['bh_status'] = ValueSet((unicode(status_ok),), t=t)
+            obj['bh_status_confirmed'] = ValueSet((unicode(t),), t=t)
             if status and (status.size is not None):
                 if status.size > 2**40:
-                    print dbAsset['xt']
-                    print status.size
-                dbAsset[u'filesize'] = ValueSet((unicode(status.size),), t=t)
+                    warn("Implausibly large asset-size: %r - %r" % (obj, status))
+                    return obj, None
+                obj['filesize'] = ValueSet((unicode(status.size),), t=t)
             if db:
-                db.update(dbAsset)
+                db.update(obj)
                 commit_pending.schedule(2)
 
-            return dbAsset, status_ok
+            return obj, status_ok
 
-    return bithorde.pool().imap(checkAsset, assets)
+    return bithorde.pool().imap(checkAsset, objs)
 
-class Counter(object):
-    def __init__(self):
-        self.i = 0
-
-    def reset(self):
-        self.i = 0
-
-    def inc(self, i = 1):
-        self.i += i
-        return self.i
-
-    def __int__(self):
-        return self.i
-
-    def inGibi(self):
-        return self.i / (1024*1024*1024.0)
-
-class Progress(Counter):
-    def __init__(self, total, unit=''):
-        Counter.__init__(self)
-        self.total = total
-        self.printer = concurrent.spawn(self.run)
-        self.unit = unit
-
-    def run(self):
-        start_time = last_time = time()
-        last_processed = int(self)
-        while int(self) < self.total:
-            concurrent.sleep(1)
-            current_time = time()
-            time_diff = time()-last_time
-            processed_diff = int(self) - last_processed
-            print "\rProcessed: %d/%d%s (%d/sec)" % (self, self.total, self.unit, processed_diff/time_diff),
-            sys.stdout.flush()
-            last_time = current_time
-            last_processed = int(self)
-        time_diff = time()-start_time
-        print "\rProcessed: %d/%d%s (%d/sec)" % (self, self.total, self.unit, self.total/time_diff)
-
-    def wait(self):
-        return self.printer.wait()
 
 class Timed:
     def __init__(self, tag):
@@ -131,18 +93,16 @@ class Timed:
         delta = (time() - self.start) * 1000
         self.log.debug("<%s>: %.1fms" % (self.tag, delta))
 
+
 def timed(method):
     def timed(*args, **kw):
         with Timed("%r (%r, %r)" % (method.__name__, args, kw)):
             res = method(*args, **kw)
             if isinstance(res, GeneratorType):
-                return list(res)
-            else:
-                return res
-
-        return result
-
+                res = list(res)
+        return res
     return timed
+
 
 class RepeatingTimer(object):
     def __init__(self, interval, code):

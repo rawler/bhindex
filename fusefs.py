@@ -16,7 +16,7 @@ from collections import defaultdict
 
 import itertools
 
-from util import hasValidStatus, timed
+from bhindex.util import hasValidStatus, timed
 
 from bithorde import Client, parseConfig, parseHashIds, message
 

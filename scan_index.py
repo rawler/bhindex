@@ -6,7 +6,7 @@ from ConfigParser import ConfigParser
 from optparse import OptionParser
 
 from bithorde import Client, parseConfig
-from util import cachedAssetLiveChecker, RepeatingTimer
+from bhindex.util import cachedAssetLiveChecker, RepeatingTimer
 
 HERE = path.dirname(__file__)
 sys.path.append(HERE)

@@ -6,9 +6,9 @@ from time import time
 import magnet
 from db import ANY, DB, ValueSet
 from bithorde import Client, parseConfig
-from util import cachedAssetLiveChecker
 
 from .tree import Filesystem
+from .util import cachedAssetLiveChecker
 
 import config
 config = config.read()
