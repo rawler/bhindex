@@ -5,7 +5,6 @@ import os
 import os.path as path
 from time import time
 
-import magnet
 from db import ANY, DB, ValueSet
 from bithorde import Client, parseConfig
 
@@ -102,7 +101,8 @@ class DBExporter(object):
         self.tgt = tgt
 
     def write_links(self, obj):
-        tgt = magnet.fromDbObject(obj)
+        xt_spec = "&".join("xt=urn:" + xt for xt in obj['xt'])
+        tgt = "magnet:?" + xt_spec
         return all(self.tgt("/".join(p), tgt) for p in self.fs.paths_for(obj))
 
     def export(self, force_all):

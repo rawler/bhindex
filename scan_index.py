@@ -11,7 +11,7 @@ from bhindex.util import cachedAssetLiveChecker, RepeatingTimer
 HERE = path.dirname(__file__)
 sys.path.append(HERE)
 
-import db, config, magnet
+import db, config
 config = config.read()
 
 LINKDIR = path.normpath(config.get('LINKSEXPORT', 'linksdir'))
