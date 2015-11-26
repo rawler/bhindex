@@ -1,4 +1,4 @@
-from . import add, links, syncer, vacuum
+from . import add, links, scanner, syncer, vacuum
 
 
 def main(args):
@@ -12,6 +12,9 @@ def main(args):
 
     ExportLinks = subparsers.add_parser('link', help='Exports the bhindex-files to a folder of symlinks')
     links.prepare_args(ExportLinks)
+
+    Scanner = subparsers.add_parser('update', help='Scans for asset-availability in bithorde and updates DB')
+    scanner.prepare_args(Scanner)
 
     Syncer = subparsers.add_parser('syncer', help='Runs online synchronization with other bhindex')
     syncer.prepare_args(Syncer)
