@@ -103,11 +103,12 @@ class Asset:
             if not self._client:
                 return None
 
-            with concurrent.Timeout((self._client.config['asset_timeout']+100) / 1000.0, False):
-                return self._statusWatch.wait()
-
-            logger.debug("Status() timeout on %s:%d", self._client, self._handle)
-            return None
+            timeout = (self._client.config['asset_timeout']+200) / 1000.0
+            try:
+                return self._statusWatch.wait(timeout)
+            except concurrent.Timeout:
+                logger.debug("Status() timeout on %s:%d", self._client, self._handle)
+                return None
         else:
             return self._status
 
@@ -171,8 +172,10 @@ class Client:
 
             while not response and retries < 3:
                 retries += 1
-                with concurrent.Timeout(timeout, False):
-                    response = respond.wait()
+                try:
+                    response = respond.wait(timeout)
+                except concurrent.Timeout:
+                    response = None
         finally:
             del self._pendingReads[reqId]
             self._reqIdAllocator.free(reqId)

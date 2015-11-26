@@ -5,24 +5,25 @@ Falls back to regular threads where eventlet is unavailable
 from __future__ import print_function
 
 try:
-    import eventlet
-    if getattr(eventlet, 'disabled', False):
-        raise ImportError
     from os import environ
     if environ.get('CONCURRENT_EVENTLET') == '0':
+        raise ImportError
+    import eventlet
+    if getattr(eventlet, 'disabled', False):
         raise ImportError
 
     from eventlet import sleep, spawn, spawn_after
     from eventlet import GreenPool as Pool
     from eventlet import connect, listen
-    from eventlet.event import Event
+    from eventlet.event import Event as _Event
     from eventlet.green import socket, subprocess
     from eventlet.hubs import trampoline
-    from eventlet.timeout import Timeout
+    from eventlet.timeout import Timeout as Timeout
 
     class ThreadLock:
         def __enter__(self):
             return self
+
         def __exit__(self, exc_type, exc_value, traceback):
             pass
 
@@ -32,23 +33,25 @@ try:
         except socket.error:
             pass
 
-except ImportError:
-    import ctypes, socket, sys, subprocess, threading, traceback, weakref
-    from errno import EBADF, errorcode
-    from time import sleep as _sleep, time
+    class Event(_Event):
+        def wait(self, timeout=None):
+            if timeout:
+                with Timeout(timeout):
+                    return super(Event, self).wait()
+            else:
+                return super(Event, self).wait()
 
+except ImportError:
+    import socket
+    import sys
+    import subprocess
+    import threading
+    import traceback
+
+    from time import sleep as _sleep
     from multiprocessing.pool import ThreadPool
     from threading import RLock as ThreadLock
-
-    tl = threading.local()
-    tl.timeouts = []
-
-    def _calcTimeout():
-        t = getattr(tl, 'timeouts', None)
-        if t:
-            return min(t) - time()
-        else:
-            return None
+    from weakref import WeakKeyDictionary
 
     def sleep(seconds=0):
         return _sleep(seconds)
@@ -56,8 +59,9 @@ except ImportError:
     class Pool(ThreadPool):
         def __init__(self, size):
             if not hasattr(threading.current_thread(), "_children"):
-                threading.current_thread()._children = weakref.WeakKeyDictionary()
+                threading.current_thread()._children = WeakKeyDictionary()
             ThreadPool.__init__(self, size)
+
         def _catch_exc(self, func, *args, **kwargs):
             try:
                 return func(*args, **kwargs)
@@ -75,6 +79,9 @@ except ImportError:
             self._error = None
             self._event = threading.Event()
 
+        def ready(self):
+            return self._event.is_set()
+
         def send(self, value):
             self._value = value
             self._error = None
@@ -84,23 +91,14 @@ except ImportError:
             self._error = (e, v, t)
             return self._event.set()
 
-        def wait(self):
-            self._event.wait(_calcTimeout())
+        def wait(self, timeout=None):
+            if not self._event.wait(timeout):
+                raise Timeout()
             if self._error:
                 (e, v, t) = self._error
                 raise e, v, t
             else:
                 return self._value
-
-    def _async_raise(tid, excobj):
-        res = ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, ctypes.py_object(excobj))
-        if res == 0:
-            raise ValueError("nonexistent thread id")
-        elif res > 1:
-            # """if it returns a number greater than one, you're in trouble,
-            # and you should call it again with exc=NULL to revert the effect"""
-            ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, None)
-            raise SystemError("PyThreadState_SetAsyncExc failed")
 
     class Thread(threading.Thread):
         def __init__(self, target, args, kwargs, *_args, **_kwargs):
@@ -119,13 +117,6 @@ except ImportError:
             self.join()
             return self.result
 
-        def kill(self, excobj=SystemExit):
-            assert self.isAlive(), "thread must be started"
-            for tid, tobj in threading._active.items():
-                if tobj is self:
-                    _async_raise(tid, excobj)
-                    return
-
         def run(self):
             try:
                 self.result = self.target(*self.args, **self.kwargs)
@@ -133,34 +124,8 @@ except ImportError:
                 self.result = sys.exc_info()
                 self._print_exc()
 
-    class Timeout(threading.Thread):
-        def __init__(self, duration, excobj=None):
-            threading.Thread.__init__(self)
-            self.duration = duration
-            self.excobj = excobj or self
-            self.setDaemon(True)
-            self.deadline = time() + duration
-            self._tid = threading.current_thread().ident
-            self._done = threading.Event()
-            self.start()
-
-        def __enter__(self):
-            if hasattr(tl, 'timeouts'):
-                tl.timeouts.append(self.deadline)
-            else:
-                tl.timeouts = [self.deadline]
-            return self
-
-        def __exit__(self, exc_type, exc_value, traceback):
-            deadline = tl.timeouts.pop()
-            assert deadline == self.deadline
-            self._done.set()
-            if exc_value == self:
-                return 1
-
-        def run(self):
-            if not self._done.wait(self.duration):
-                _async_raise(self._tid, self.excobj)
+    class Timeout(BaseException):
+        pass
 
     def spawn(func, *args, **kwargs):
         t = Thread(target=func, args=args, kwargs=kwargs)
@@ -168,8 +133,8 @@ except ImportError:
         t.start()
         return t
 
-    def spawn_after(time, func):
-        t = threading.Timer(time, func)
+    def spawn_after(t, func):
+        t = threading.Timer(t, func)
         t.start()
         return t
 
