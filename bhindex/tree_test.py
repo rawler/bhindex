@@ -89,3 +89,16 @@ class TestFilesystem(object):
         self.fs.root()['apa'].rm('file')
         with assert_raises(NotFoundError):
             self.fs.lookup(['apa', 'file'])
+
+    def test_mv(self):
+        def assert_same_file(path, ref_file):
+            assert_equals(self.fs.lookup(path).ids(), self.f['xt'])
+        assert_same_file(P("apa/file"), self.f)
+        self.fs.mv(P("apa"), P("banan"), t=1)
+        with assert_raises(NotFoundError):
+            self.fs.lookup(P("apa"))
+        assert_same_file(P("banan/file"), self.f)
+        self.fs.mv(P("banan/file"), P("banan/other_file"), t=2)
+        assert_same_file(P("banan/other_file"), self.f)
+        self.fs.mv(P("banan/other_file"), P("apa/file"), t=3)
+        assert_same_file(P("apa/file"), self.f)

@@ -1,4 +1,4 @@
-from . import add, links, scanner, syncer, vacuum
+from . import add, links, scanner, syncer, tree, vacuum
 
 
 def main(args):
@@ -12,6 +12,9 @@ def main(args):
 
     ExportLinks = subparsers.add_parser('link', help='Exports the bhindex-files to a folder of symlinks')
     links.prepare_args(ExportLinks)
+
+    MV = subparsers.add_parser('mv', help='Move a file or directory in the bithorde tree')
+    tree.prepare_mv_args(MV)
 
     Scanner = subparsers.add_parser('update', help='Scans for asset-availability in bithorde and updates DB')
     scanner.prepare_args(Scanner)

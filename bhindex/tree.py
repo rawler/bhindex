@@ -174,3 +174,31 @@ class Filesystem(object):
         for segment in directory:
             dir = dir.mkdir(segment, t)
         return dir
+
+    def mv(self, src, dst, t=None):
+        src_dir = self.lookup(src[:-1])
+        target = src_dir[src[-1]]
+
+        dst_dir = self.mkdir(dst[:-1], t=t)
+        dst_dir.link(dst[-1], target, t=t)
+        src_dir.rm(src[-1], t=t)
+
+
+def prepare_mv_args(parser):
+    parser.add_argument("source", help="Source path to move. IE 'dir/file'")
+    parser.add_argument("destination", help="Path and name to move the file to. IE 'dir/file'")
+    parser.set_defaults(main=mv_main)
+
+
+def mv_main(args):
+    from db import DB
+    import config
+    db = DB(config.read().get('DB', 'file'))
+    t = time()
+
+    src = Path(args.source)
+    dst = Path(args.destination)
+
+    with db.transaction():
+        tree = Filesystem(db)
+        tree.mv(src, dst, t)
