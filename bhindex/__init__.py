@@ -21,6 +21,9 @@ def main(args):
     ExportLinks = subparsers.add_parser('link', help='Exports the bhindex-files to a folder of symlinks')
     links.prepare_args(ExportLinks, cfg)
 
+    LS = subparsers.add_parser('ls', help='List files in a directory of BHIndex')
+    tree.prepare_ls_args(LS, cfg)
+
     MV = subparsers.add_parser('mv', help='Move a file or directory in the bithorde tree')
     tree.prepare_mv_args(MV, cfg)
 

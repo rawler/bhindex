@@ -63,8 +63,8 @@ class Directory(Node):
                         warn("Malformed directory for %s: %s" % (child.id, dirent))
                     if dir == dirobj.id:
                         d.setdefault(name, []).append(child)
-        for objs in d.itervalues():
-            yield self._map(objs)
+        for path, objs in sorted(d.iteritems()):
+            yield path, self._map(objs)
 
     def __iter__(self):
         return self.ls()
@@ -163,8 +163,15 @@ class Filesystem(object):
 
     def lookup(self, path):
         res = self.root()
+        current_path = list()
         for p in path:
-            res = res[p]
+            try:
+                res = res[p]
+            except NotFoundError:
+                raise NotFoundError("%s not found under '%s'" % (p, Path(current_path)))
+            else:
+                current_path.append(p)
+
         return res
 
     def mkdir(self, directory, t=None):
@@ -182,6 +189,25 @@ class Filesystem(object):
         dst_dir = self.mkdir(dst[:-1], t=t)
         dst_dir.link(dst[-1], target, t=t)
         src_dir.rm(src[-1], t=t)
+
+
+def prepare_ls_args(parser, config):
+    parser.add_argument("path", nargs='*', help="Path to list files in.")
+    parser.set_defaults(main=ls_main)
+
+
+def ls_main(args, config, db):
+    paths = args.path or ['']
+    fs = Filesystem(db)
+    for path in paths:
+        dir = fs.lookup(Path(path))
+        if not hasattr(dir, 'ls'):
+            raise RuntimeError('%s is not ')
+        for name, node in dir.ls():
+            if isinstance(node, Directory):
+                print "%s/" % name
+            else:
+                print "%s -> %s" % (name, node.ids())
 
 
 def prepare_mv_args(parser, config):

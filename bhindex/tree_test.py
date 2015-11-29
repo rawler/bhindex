@@ -4,7 +4,6 @@ from nose.tools import *
 from warnings import catch_warnings
 
 from .tree import *
-
 from db import DB, Object, ValueSet
 
 P = Path
@@ -21,8 +20,8 @@ def ids_set(x):
         return frozenset(a.id for a in x.objs)
 
 
-def type_ids_set(l):
-    return frozenset((type(n), ids_set(n)) for n in l)
+def name_type_ids_set(l):
+    return frozenset((name, type(obj), ids_set(obj)) for name, obj in l)
 
 
 def test_Path():
@@ -81,8 +80,8 @@ class TestFilesystem(object):
     def test_ls(self):
         files = list(self.fs.root().ls())
 
-        assert_set_equal(type_ids_set(files), fz((Directory, fz(u'dir:some/dir', u'dir:redundant'))))
-        assert_set_equal(type_ids_set(files[0]), fz((File, u'some_file')))
+        assert_set_equal(name_type_ids_set(files), fz(('apa', Directory, fz(u'dir:some/dir', u'dir:redundant'))))
+        assert_set_equal(name_type_ids_set(files[0][1]), fz(('file', File, u'some_file')))
 
     def test_rm(self):
         assert_is_instance(self.fs.lookup(['apa', 'file']), File)
