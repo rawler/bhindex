@@ -1,13 +1,7 @@
-import config
-from db import DB
-
-
-def prepare_args(parser):
+def prepare_args(parser, config):
     parser.set_defaults(main=main)
 
 
-def main(args):
-    db = DB(config.read().get('DB', 'file'))
-
+def main(args, config, db):
     db.vacuum()
     db.commit()

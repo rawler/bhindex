@@ -184,16 +184,13 @@ class Filesystem(object):
         src_dir.rm(src[-1], t=t)
 
 
-def prepare_mv_args(parser):
+def prepare_mv_args(parser, config):
     parser.add_argument("source", help="Source path to move. IE 'dir/file'")
     parser.add_argument("destination", help="Path and name to move the file to. IE 'dir/file'")
     parser.set_defaults(main=mv_main)
 
 
-def mv_main(args):
-    from db import DB
-    import config
-    db = DB(config.read().get('DB', 'file'))
+def mv_main(args, config, db):
     t = time()
 
     src = Path(args.source)

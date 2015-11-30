@@ -5,17 +5,11 @@ import os
 import os.path as path
 from time import time
 
-from db import ANY, DB, ValueSet
+from db import ANY, ValueSet
 from bithorde import Client, parseConfig
 
 from .tree import Filesystem
 from .util import cachedAssetLiveChecker
-
-import config
-config = config.read()
-
-DEFAULT_LINKSDIR = path.normpath(config.get('LINKSEXPORT', 'linksdir'))
-DEFAULT_BHFUSEDIR = config.get('BITHORDE', 'fusedir')
 
 
 class LinksWriter(object):
@@ -130,7 +124,17 @@ class DBExporter(object):
         return count, size
 
 
-def export(db, bithorde, output_dir=DEFAULT_LINKSDIR, bhfusedir=DEFAULT_BHFUSEDIR, prefix=None, force_all=False):
+def _config_linksdir_bhfusedir(config):
+    return \
+        path.normpath(config.get('LINKSEXPORT', 'linksdir')), \
+        config.get('BITHORDE', 'fusedir')
+
+
+def export_from_config(db, bithorde, config):
+    return export(db, bithorde, *_config_linksdir_bhfusedir(config))
+
+
+def export(db, bithorde, output_dir, bhfusedir, prefix=None, force_all=False):
     tgt = LinksWriter(output_dir, bhfusedir)
     if prefix:
         tgt = FilteredExporter(tgt, prefix)
@@ -141,7 +145,9 @@ def export(db, bithorde, output_dir=DEFAULT_LINKSDIR, bhfusedir=DEFAULT_BHFUSEDI
           (count, size / (1024 * 1024 * 1024)))
 
 
-def prepare_args(parser):
+def prepare_args(parser, config):
+    DEFAULT_LINKSDIR, DEFAULT_BHFUSEDIR = _config_linksdir_bhfusedir(config)
+
     parser.add_argument("-T", "--force-all", action="store_true",
                         help="Export ALL links, even links marked in DB as already exported")
     parser.add_argument("-o", "--output-dir", action="store",
@@ -155,12 +161,11 @@ def prepare_args(parser):
     parser.set_defaults(main=main)
 
 
-def main(args):
+def main(args, config, db):
     if not args.output_dir:
         raise argparse.ArgumentError(
             None, "Needs link output-dir in either config or as argument\n")
 
-    db = DB(config.get('DB', 'file'))
     bithorde = Client(parseConfig(config.items('BITHORDE')))
 
     return export(db, bithorde, args.output_dir, args.target_dir, args.prefix, args.force_all)

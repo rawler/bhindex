@@ -7,7 +7,7 @@ from warnings import warn
 
 from .errors import CLIError
 from .tree import Filesystem, NotFoundError, Path
-from .links import export
+from .links import export_from_config
 
 
 class FileExistsError(BaseException):
@@ -56,13 +56,14 @@ class AddController(object):
         return f
 
 
-def prepare_args(parser):
+def prepare_args(parser, config):
     mode = parser.add_mutually_exclusive_group()
+    link_default = config.getboolean('BITHORDE', 'upload_link')
     mode.add_argument("-l", "--link",
-                      action="store_true", dest="link", default=None,
+                      action="store_true", dest="link", default=link_default,
                       help="Use file linking to add the file to bithorde")
     mode.add_argument("-u", "--upload",
-                      action="store_false", dest="link", default=None,
+                      action="store_false", dest="link", default=link_default,
                       help="Upload files to bithorde")
 
     parser.add_argument("--no-export-links", action="store_false",
@@ -119,19 +120,11 @@ def find_files(args):
             yield path
 
 
-def main(args):
-    import config
+def main(args, config, db):
     from bithorde import Client, parseConfig
-    from db import DB
 
-    config = config.read()
-    db = DB(config.get('DB', 'file'))
     bithorde = Client(parseConfig(config.items('BITHORDE')))
-    link = args.link
-    if link is None:
-        link = config.getboolean('BITHORDE', 'upload_link')
-
-    if link:
+    if args.link:
         bhupload = bithorde.link
     else:
         bhupload = bithorde.upload
@@ -151,4 +144,4 @@ def main(args):
             print("  -> %s" % f.ids())
 
     if add.added and args.export_links:
-        export(db, bithorde)
+        export_from_config(db, bithorde, config)

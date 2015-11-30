@@ -1,21 +1,10 @@
 from __future__ import absolute_import
 
-import os
-import os.path as path
-import sys
-from ConfigParser import ConfigParser
-from optparse import OptionParser
+from warnings import warn
 
 from bithorde import Client, parseConfig
 from bhindex.util import cachedAssetLiveChecker, RepeatingTimer
-
-import config
-import db
-
-config = config.read()
-
-LINKDIR = path.normpath(config.get('LINKSEXPORT', 'linksdir'))
-BHFUSEDIR = config.get('BITHORDE', 'fusedir')
+from db import ANY
 
 
 class StepCounter:
@@ -32,6 +21,7 @@ class StepCounter:
 
 
 class Scanner(object):
+
     def __init__(self, db, bithorde):
         self.db = db
         self.bithorde = bithorde
@@ -51,10 +41,10 @@ class Scanner(object):
                     self.count += 1
                     self.size += fsize
                 else:
-                    print "Asset with implausible size: %s" % obj
+                    warn("Asset with implausible size: %s" % obj)
 
 
-def prepare_args(parser):
+def prepare_args(parser, config):
     parser.add_argument("-a", "--all-objects",
                         action="store_true", dest="all_objects", default=False,
                         help="Look for availability on all objects, even those with still valid status in DB.")
@@ -63,18 +53,17 @@ def prepare_args(parser):
     parser.set_defaults(main=main)
 
 
-def main(args):
-    DB = db.open(config.get('DB', 'file'))
+def main(args, config, db):
     bithorde = Client(parseConfig(config.items('BITHORDE')))
 
-    scanner = Scanner(DB, bithorde)
+    scanner = Scanner(db, bithorde)
 
     def echo_rate():
         print "Processed/second: ", (scanner.processed.read_and_reset() / 2)
     if args.verbose:
         RepeatingTimer(2, echo_rate)
 
-    scanner.run(DB.query({'xt': db.ANY}), args.all_objects)
+    scanner.run(db.query({'xt': ANY}), args.all_objects)
 
     print("Scanned %s assets totaling %s GB" %
           (scanner.count, scanner.size / (1024 * 1024 * 1024)))

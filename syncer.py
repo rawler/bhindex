@@ -4,12 +4,14 @@
 import sys
 
 from argparse import ArgumentParser
-from bhindex import syncer
+from bhindex import config, syncer
+from db import DB
 
 if __name__ == '__main__':
     CLI = ArgumentParser(
         description='syncer.py - Deprecated, see bhindex.py instead',
     )
-    syncer.prepare_args(CLI)
+    cfg = config.read()
+    syncer.prepare_args(CLI, cfg)
     args = CLI.parse_args(sys.argv[1:])
-    syncer.main(args)
+    syncer.main(args, cfg, DB(cfg.get('DB', 'file')))

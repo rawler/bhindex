@@ -1,8 +1,5 @@
 from db.syncer import Syncer
 
-from db import DB
-from config import read as readconf
-
 
 def parse_addr(addr):
     addr = addr.strip()
@@ -17,18 +14,16 @@ def parse_addr(addr):
         return addr[0]
 
 
-def prepare_args(parser):
+def prepare_args(parser, config):
     parser.add_argument("-s", "--no-sync", action="store_false", dest="sync", default=True,
                         help="Improve I/O write-performance at expense of durability. Might be worth it during initial sync.")
     parser.set_defaults(main=main)
 
 
-def main(args):
-    config = readconf()
+def main(args, config, db):
     sync_config = config.items('LIVESYNC')
     connect_addresses = set(parse_addr(addr)
                             for addr in sync_config['connect'].split(","))
-    db = DB(config.get('DB', 'file'), sync=args.sync)
     sync_config = {
         'name': sync_config['name'],
         'port': int(sync_config['port']),
