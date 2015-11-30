@@ -62,7 +62,6 @@ class Object(object):
         return key in self._dict
 
     def __setitem__(self, key, value):
-        assert isinstance(key, unicode)
         assert isinstance(value, ValueSet)
 
         key = key.lower()
@@ -71,8 +70,6 @@ class Object(object):
             self._dict[key] = value
 
     def __delitem__(self, key):
-        assert isinstance(key, unicode)
-
         if key in self._dict:
             self._dirty.add(key)
             self._deleted[key] = time()
