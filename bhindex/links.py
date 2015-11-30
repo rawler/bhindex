@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import argparse
 import os
 import os.path as path

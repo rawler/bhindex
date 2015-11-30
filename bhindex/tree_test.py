@@ -1,11 +1,13 @@
+# -*- coding: utf8 -*-
+
 from nose.tools import *
 from warnings import catch_warnings
 
-from .tree import Directory, File, Filesystem
-from . import tree
+from .tree import *
 
 from db import DB, Object, ValueSet
-from mock import MagicMock, patch
+
+P = Path
 
 
 def fz(*items):
@@ -23,6 +25,13 @@ def type_ids_set(l):
     return frozenset((type(n), ids_set(n)) for n in l)
 
 
+def test_Path():
+    assert_equals(Path("/apa/apa"), ("apa", "apa"))
+    assert_equals(Path("/apa/apa"), Path([u"apa", u"apa"]))
+    assert_equals(Path("/apa/apa"), Path(" apa/apa"))
+    assert_equals(Path("/åpa/åpa"), Path([u"åpa", u"åpa"]))
+
+
 class TestFilesystem(object):
     def setup(self):
         xt = u'tree:tiger:ASDASDSADASDASDSADASDASDSADASDASDSADASD'
@@ -31,7 +40,7 @@ class TestFilesystem(object):
             u'directory': ValueSet(u"dir:/apa", 0),
         }))
         self.d = db.update(Object(u"dir:redundant", {
-            u'directory': ValueSet(u"dir:/apa"),
+            u'directory': ValueSet(u"dir:/apa", 0),
         }))
         self.f = db.update(Object('some_file', {
             u'directory': ValueSet(u"dir:some/dir/file", 0),
@@ -63,7 +72,8 @@ class TestFilesystem(object):
                 assert_equal(len(w), 1)
 
     def test_mkdir(self):
-        self.fs.mkdir(["Movies", "Anime"])
+        self.fs.mkdir(P("Movies/Anime"))
+        assert_is_instance(self.fs.lookup(P("Movies/Anime")), Directory)
 
     def test_root(self):
         assert_is_instance(self.fs.root(), Directory)
@@ -74,16 +84,8 @@ class TestFilesystem(object):
         assert_set_equal(type_ids_set(files), fz((Directory, fz(u'dir:some/dir', u'dir:redundant'))))
         assert_set_equal(type_ids_set(files[0]), fz((File, u'some_file')))
 
-
-def test_make_directory():
-    inst = MagicMock()
-    with patch(__name__+'.tree.Filesystem', return_value=inst) as fs:
-        tree.make_directory("apa", ["Movies"])
-        fs.assert_called_once_with("apa")
-        inst.mkdir.assert_called_once_with(["Movies"], None)
-
-    inst = MagicMock()
-    with patch(__name__+'.tree.Filesystem', return_value=inst) as fs:
-        tree.make_directory("apa", ["Movies"], 345)
-        fs.assert_called_once_with("apa")
-        inst.mkdir.assert_called_once_with(["Movies"], 345)
+    def test_rm(self):
+        assert_is_instance(self.fs.lookup(['apa', 'file']), File)
+        self.fs.root()['apa'].rm('file')
+        with assert_raises(NotFoundError):
+            self.fs.lookup(['apa', 'file'])

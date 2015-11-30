@@ -1,37 +1,36 @@
-from base64 import b64encode
 from logging import getLogger
+from os.path import normpath as osnormpath
 from time import time
-from uuid import uuid4
 from warnings import warn
 
-from db import Starts, ValueSet
-
+from db import Object, Starts, ValueSet
+from .bithorde import Identifiers, obj_from_ids
 log = getLogger('tree')
 
 
-def get_folder_id(db, parent_id, name, t):
-    directory_attr = u'%s/%s' % (parent_id, name)
-    folders = list(db.query_ids({u'directory': directory_attr}))
-    if folders:
-        if len(folders) > 1:
-            log.warning(
-                "Duplicate folders for %s: %r", directory_attr, folders)
-        return folders[0]
-    else:
-        folder_id = u'dir:%s' % b64encode(uuid4().bytes).strip('=')
-        folder = db[folder_id]
-        folder[u'directory'] = ValueSet((directory_attr,), t=t)
-        db.update(folder)
-        return folder_id
+class NotFoundError(LookupError):
+    pass
 
 
-class File(object):
-    def __init__(self, ctx, obj):
+class Node(object):
+    def __init__(self, ctx, objs):
         self.db = getattr(ctx, 'db', ctx)
+        self.objs = objs
+
+
+class File(Node):
+    def __init__(self, ctx, obj):
+        super(File, self).__init__(ctx, [obj])
         self.obj = obj
 
-    def xt(self):
-        return self.obj['xt']
+    def ids(self):
+        return Identifiers(self.obj['xt'])
+
+    def __eq__(self, other):
+        return self.obj == other.obj
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 def split_directory_entry(dirent):
@@ -43,11 +42,7 @@ def split_directory_entry(dirent):
     return dir, name
 
 
-class Directory(object):
-    def __init__(self, ctx, objs):
-        self.db = getattr(ctx, 'db', ctx)
-        self.objs = objs
-
+class Directory(Node):
     def _map(self, objs):
         if any(o.any('xt') for o in objs):
             if len(objs) > 1:
@@ -78,10 +73,68 @@ class Directory(object):
         objs = list()
         for obj in self.objs:
             objs += self.db.query({u'directory': "%s/%s" % (obj.id, key)})
-        if objs > 0:
+        if objs:
             return self._map(objs)
         else:
-            raise KeyError("%s not found in %s" % key, self.id)
+            raise NotFoundError("%s not found in %s" % (key, [x.id for x in self.objs]))
+
+    def mkdir(self, name, t=None):
+        try:
+            return self[name]
+        except:
+            if t is None:
+                t = time()
+            directory_attr = u'%s/%s' % (self.objs[0].id, name)
+            new = Object.new('dir')
+            new[u'directory'] = ValueSet((directory_attr,), t=t)
+            self.db.update(new)
+            return Directory(self, (new,))
+
+    def link(self, name, node, t=None):
+        directory_attr = u'%s/%s' % (self.objs[0].id, name)
+        for obj in node.objs:
+            try:
+                dir = obj[u'directory']
+            except KeyError:
+                obj[u'directory'] = ValueSet((directory_attr,), t=t)
+            else:
+                dir.add(directory_attr, t=t)
+                obj[u'directory'] = dir
+            self.db.update(obj)
+
+    def rm(self, name, t=None):
+        try:
+            n = self[name]
+        except NotFoundError:
+            return
+
+        purge_list = set(u'%s/%s' % (obj.id, name) for obj in self.objs)
+
+        for obj in getattr(n, 'objs', None) or [n.obj]:
+            dirs = ValueSet(obj[u'directory'] - purge_list, t=t)
+            obj[u'directory'] = dirs
+            self.db.update(obj)
+
+    def add_file(self, name, ids, t=None):
+        ids = Identifiers(ids)
+        f = File(self, obj_from_ids(self.db, ids))
+
+        self.link(name, f, t=t)
+        return f
+
+
+class Path(tuple):
+    def __new__(cls, p):
+        if p and isinstance(p, basestring):
+            p = unicode(p, 'utf8')
+            p = osnormpath(p).strip(u'/ ').split(u'/')
+        return super(Path, cls).__new__(cls, p)
+
+    def __str__(self):
+        return "/".join(self)
+
+    def __unicode__(self):
+        return u"/".join(self)
 
 
 class Filesystem(object):
@@ -105,6 +158,9 @@ class Filesystem(object):
     def root(self):
         return Directory(self, [self.db['dir:']])
 
+    def transaction(self):
+        return self.db.transaction()
+
     def lookup(self, path):
         res = self.root()
         for p in path:
@@ -114,12 +170,7 @@ class Filesystem(object):
     def mkdir(self, directory, t=None):
         if t is None:
             t = time()
-        dir_id = u"dir:"
-        db = self.db
+        dir = self.root()
         for segment in directory:
-            dir_id = get_folder_id(db, dir_id, segment, t)
-        return dir_id
-
-
-def make_directory(db, directory, t=None):
-    return Filesystem(db).mkdir(directory, t)
+            dir = dir.mkdir(segment, t)
+        return dir

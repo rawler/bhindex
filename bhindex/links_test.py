@@ -8,7 +8,7 @@ from nose.tools import *
 from mock import Mock, MagicMock
 
 from db import DB, Object, ValueSet
-from bithorde import message
+from bithorde import proto
 
 
 class TempDir(object):
@@ -71,7 +71,7 @@ def test_DBExporter():
     asset.__enter__ = Mock(return_value=asset)
     asset.__exit__ = Mock(return_value=False)
     asset.status = Mock(
-        return_value=message.AssetStatus(status=message.SUCCESS))
+        return_value=proto.AssetStatus(status=proto.SUCCESS))
 
     bithorde = Mock()
     bithorde.open = Mock(return_value=asset)
