@@ -1,4 +1,4 @@
-from . import add, config, links, scanner, syncer, tree, vacuum
+from . import add, cat, config, links, scanner, syncer, tree, vacuum
 
 
 def main(args):
@@ -14,6 +14,9 @@ def main(args):
 
     Add = subparsers.add_parser('add', help='Add files to BitHorde and BHIndex')
     add.prepare_args(Add, cfg)
+
+    Cat = subparsers.add_parser('cat', help='Read one or more files from BitHorde')
+    cat.prepare_args(Cat, cfg)
 
     ExportLinks = subparsers.add_parser('link', help='Exports the bhindex-files to a folder of symlinks')
     links.prepare_args(ExportLinks, cfg)

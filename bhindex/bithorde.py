@@ -1,9 +1,18 @@
 from __future__ import absolute_import
 
-from base64 import b32encode
+from base64 import b32encode, b32decode
+from warnings import warn
 
 from db import ValueSet
 from bithorde import message as proto
+
+
+def _pad_base32(b32):
+    overflow = len(b32) % 5
+    if overflow:
+        return b32 + '=' * (5-overflow)
+    else:
+        return b32
 
 
 class Identifiers(frozenset):
@@ -25,6 +34,17 @@ class Identifiers(frozenset):
 
     def xt(self):
         return self
+
+    @staticmethod
+    def _to_proto_id(xt):
+        if xt.startswith('tree:tiger:'):
+            id_b32 = _pad_base32(xt[11:])
+            return proto.Identifier(type=proto.TREE_TIGER, id=b32decode(id_b32))
+        else:
+            warn("Unsupported id format: %s" % xt)
+
+    def proto_ids(self):
+        return tuple(self._to_proto_id(xt) for xt in self)
 
 
 def obj_from_ids(db, ids, t=None):

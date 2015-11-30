@@ -139,6 +139,14 @@ class Asset(BaseAsset):
 
         return response and response.content
 
+    def __iter__(self):
+        offset = 0
+        size = self.status().size
+        while offset < size:
+            chunk = self.read(offset, 128*1024)
+            yield chunk
+            offset += len(chunk)
+
 
 class UploadAsset(BaseAsset):
     def __init__(self, client, handle):
