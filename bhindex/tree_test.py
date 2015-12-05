@@ -38,18 +38,19 @@ class TestFilesystem(object):
         self.d = db.update(Object(u"dir:some/dir", {
             u'directory': ValueSet(u"dir:/apa", 0),
         }))
-        self.d = db.update(Object(u"dir:redundant", {
+        self.d2 = db.update(Object(u"dir:redundant", {
             u'directory': ValueSet(u"dir:/apa", 0),
         }))
         self.f = db.update(Object('some_file', {
-            u'directory': ValueSet(u"dir:some/dir/file", 0),
+            u'directory': ValueSet(u"dir:some/dir/file.ext", 0),
             u'xt': ValueSet(xt),
         }))
         self.fs = Filesystem(db)
 
     def test_paths_for(self):
         assert_set_equal(self.fs.paths_for(self.d), fz((u"apa",)))
-        assert_set_equal(self.fs.paths_for(self.f), fz((u"apa", u"file")))
+        assert_set_equal(self.fs.paths_for(self.d2), fz((u"apa",)))
+        assert_set_equal(self.fs.paths_for(self.f), fz((u"apa", u"file.ext")))
 
     def test_broken_direntry(self):
         broken = [
@@ -80,24 +81,59 @@ class TestFilesystem(object):
     def test_ls(self):
         files = list(self.fs.root().ls())
 
-        assert_set_equal(name_type_ids_set(files), fz(('apa', Directory, fz(u'dir:some/dir', u'dir:redundant'))))
-        assert_set_equal(name_type_ids_set(files[0][1]), fz(('file', File, u'some_file')))
+        assert_set_equal(name_type_ids_set(files), fz(
+            ('apa', Directory, fz(u'dir:some/dir', u'dir:redundant'))))
+        assert_set_equal(
+            name_type_ids_set(files[0][1]), fz(('file.ext', File, u'some_file')))
 
     def test_rm(self):
-        assert_is_instance(self.fs.lookup(['apa', 'file']), File)
-        self.fs.root()['apa'].rm('file')
+        assert_is_instance(self.fs.lookup(['apa', 'file.ext']), File)
+        self.fs.root()['apa'].rm('file.ext')
         with assert_raises(NotFoundError):
-            self.fs.lookup(['apa', 'file'])
+            self.fs.lookup(['apa', 'file.ext'])
 
     def test_mv(self):
         def assert_same_file(path, ref_file):
             assert_equals(self.fs.lookup(path).ids(), self.f['xt'])
-        assert_same_file(P("apa/file"), self.f)
+        assert_same_file(P("apa/file.ext"), self.f)
         self.fs.mv(P("apa"), P("banan"), t=1)
         with assert_raises(NotFoundError):
             self.fs.lookup(P("apa"))
-        assert_same_file(P("banan/file"), self.f)
-        self.fs.mv(P("banan/file"), P("banan/other_file"), t=2)
+        assert_same_file(P("banan/file.ext"), self.f)
+        self.fs.mv(P("banan/file.ext"), P("banan/other_file"), t=2)
         assert_same_file(P("banan/other_file"), self.f)
-        self.fs.mv(P("banan/other_file"), P("apa/file"), t=3)
-        assert_same_file(P("apa/file"), self.f)
+        self.fs.mv(P("banan/other_file"), P("apa/file.ext"), t=3)
+        assert_same_file(P("apa/file.ext"), self.f)
+
+    def test_colliding_file(self):
+        f2 = self.db.update(Object('some_file_colliding_dir', {
+            u'directory': ValueSet(u"dir:some/dir/file.ext", 0),
+        }))
+
+        assert_set_equal(name_type_ids_set(self.fs.lookup(P('apa'))), fz(
+            ('file.ext', Split, fz(u'some_file', f2.id)),
+        ))
+        assert_set_equal(name_type_ids_set(self.fs.lookup(P('apa/file.ext'))), fz(
+            (u'some_file.ext', File, u'some_file'),
+            (u'some_file_colliding_dir.ext', Directory,
+             fz(u'some_file_colliding_dir', )),
+        ))
+
+        self.fs.mv(P('apa/file.ext'), P('banan/file'))
+
+        assert_set_equal(name_type_ids_set(self.fs.lookup(P('banan'))), fz(
+            ('file', Split, fz(u'some_file', f2.id)),
+        ))
+        assert_set_equal(name_type_ids_set(self.fs.lookup(P('banan/file'))), fz(
+            (u'some_file', File, u'some_file'),
+            (u'some_file_colliding_dir', Directory,
+             fz(u'some_file_colliding_dir', )),
+        ))
+
+        self.fs.mv(P('banan/file/some_file'), P('apa/file.ext'))
+        assert_set_equal(name_type_ids_set(self.fs.lookup(P('apa'))), fz(
+            (u'file.ext', File, u'some_file'),
+        ))
+        assert_set_equal(name_type_ids_set(self.fs.lookup(P('banan'))), fz(
+            (u'file', Directory, fz(f2.id,)),
+        ))

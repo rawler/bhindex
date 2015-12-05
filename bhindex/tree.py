@@ -43,10 +43,10 @@ def split_directory_entry(dirent):
 
 
 class Directory(Node):
-    def _map(self, objs):
+    def _map(self, objs, name):
         if any(o.any('xt') for o in objs):
             if len(objs) > 1:
-                warn("TODO: Merge NON-directories: %s" % ([o.id for o in objs]))
+                return Split(self, objs, name)
             else:
                 return File(self, objs[0])
         else:
@@ -63,8 +63,8 @@ class Directory(Node):
                         warn("Malformed directory for %s: %s" % (child.id, dirent))
                     if dir == dirobj.id:
                         d.setdefault(name, []).append(child)
-        for path, objs in sorted(d.iteritems()):
-            yield path, self._map(objs)
+        for name, objs in sorted(d.iteritems()):
+            yield name, self._map(objs, name)
 
     def __iter__(self):
         return self.ls()
@@ -74,7 +74,7 @@ class Directory(Node):
         for obj in self.objs:
             objs += self.db.query({u'directory': "%s/%s" % (obj.id, key)})
         if objs:
-            return self._map(objs)
+            return self._map(objs, key)
         else:
             raise NotFoundError("%s not found in %s" % (key, [x.id for x in self.objs]))
 
@@ -82,8 +82,6 @@ class Directory(Node):
         try:
             return self[name]
         except:
-            if t is None:
-                t = time()
             directory_attr = u'%s/%s' % (self.objs[0].id, name)
             new = Object.new('dir')
             new[u'directory'] = ValueSet((directory_attr,), t=t)
@@ -121,6 +119,41 @@ class Directory(Node):
 
         self.link(name, f, t=t)
         return f
+
+
+class Split(Directory):
+    def __init__(self, ctx, objs, conflictname):
+        super(Split, self).__init__(ctx, objs)
+        self._dir = ctx
+        self._conflictname = conflictname
+        name_ext = conflictname.rsplit('.', 1)
+        if len(name_ext) > 1:
+            self._ext = ".%s" % name_ext[1]
+        else:
+            self._ext = ""
+
+    def _entry(self, id):
+        return "%s%s" % (id.replace("/", "_"), self._ext)
+
+    def ls(self):
+        for obj in self.objs:
+            name = self._entry(obj.id)
+            yield name, self._map((obj,), name)
+
+    def __getitem__(self, key):
+        for obj in self.objs:
+            name = self._entry(obj.id)
+            if name == key:
+                return self._map((obj,), key)
+
+    def rm(self, name, t=None):
+        purge_list = set("%s/%s" % (obj.id, self._conflictname) for obj in self._dir.objs)
+        for obj in self.objs:
+            ename = self._entry(obj.id)
+            if ename == name:
+                dir = ValueSet(obj['directory']-purge_list, t=t)
+                obj['directory'] = dir
+                self.db.update(obj)
 
 
 class Path(tuple):
