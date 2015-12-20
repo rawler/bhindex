@@ -1,4 +1,3 @@
-from util import *
 import concurrent
 
 from nose.tools import *
