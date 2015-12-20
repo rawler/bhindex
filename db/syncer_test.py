@@ -192,7 +192,7 @@ class TestSyncConnection():
 
 class TestP2P():
     def setup(self):
-        self.s = P2P(0, self.spawn, connect_interval=0.1)
+        self.s = P2P(0, self.spawn, connect_interval=0.05)
 
     def spawn(self, sock, set_session):
         msg = sock.recv(1024)
@@ -255,7 +255,7 @@ class TestP2P():
         s = concurrent.listen(('', 0))
         s.listen(3)
         self.s.add_address(s.getsockname())
-        s.settimeout(0.4)
+        s.settimeout(0.2)
         client, _ = s.accept()
 
         assert_raises(concurrent.socket.error, s.accept)

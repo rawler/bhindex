@@ -135,9 +135,10 @@ class SyncConnection(object):
 
     def close(self):
         if self._sock:
+            sock = self._sock
             self.shutdown()
-            self._sock.close()
             self._sock = None
+            sock.close()
 
     def closed(self):
         return self._sock is None
@@ -194,9 +195,28 @@ class SyncConnection(object):
         self._last_serial_sent = last_serial
 
 
-class _P2PSession(object):
-    def __init__(self):
-        self.uuid = None
+class KeyHolder(object):
+    def __init__(self, dict):
+        self.dict = dict
+        self.keys = set()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        for key in self.keys:
+            try:
+                self.dict.pop(key)
+            except KeyError:
+                pass
+
+    def set_key(self, key, value):
+        self.keys.add(key)
+        if key in self.dict:
+            return None   # Slow was already occupied
+        else:
+            self.dict[key] = value
+            return value  # Slot was empty, we set a new key
 
 
 class P2P(object):
@@ -218,7 +238,7 @@ class P2P(object):
             self._connectAddresses[addr] = True
 
     def remove_address(self, addr):
-        self._connectAddresses[addr] = None
+        del self._connectAddresses[addr]
 
     def _connector(self):
         def _connect(addr):
@@ -229,8 +249,7 @@ class P2P(object):
 
         connectPool = concurrent.Pool(20)
         while self._sock:
-            connections = set(self.connections.keys())
-            addresses = [addr for addr, uuid in self._connectAddresses.iteritems() if uuid and (uuid not in connections)]
+            addresses = [addr for addr, uuid in self._connectAddresses.iteritems() if uuid and (uuid not in self.connections)]
             for address, sock in connectPool.imap(_connect, addresses):
                 if sock:
                     self._connectAddresses[address] = False
@@ -242,24 +261,15 @@ class P2P(object):
             logging.debug("Connection established to %s", sock.getpeername())
         else:
             logging.debug("Connection established from %s", sock.getpeername())
-        session = _P2PSession()
 
-        def set_session(uuid, s):
-            if connectAddress in self._connectAddresses:
-                self._connectAddresses[connectAddress] = uuid
-            connected = self.connections.get(uuid, None)
-            if connected:  # Was already connected
-                return None
-            else:
-                session.uuid = uuid
-                self.connections[uuid] = s
-                return sock
-
-        try:
+        with KeyHolder(self.connections) as kh:
+            def set_session(uuid, s):
+                if not self._sock:
+                    return False
+                if connectAddress in self._connectAddresses:
+                    self._connectAddresses[connectAddress] = uuid
+                return kh.set_key(uuid, s)
             self.handler(sock, set_session)
-        finally:
-            if session.uuid:
-                self.connections.pop(session.uuid, None)
 
     def local_addr(self):
         return self._sock.getsockname()
@@ -270,10 +280,14 @@ class P2P(object):
 
     def close(self):
         if self._sock:
-            self._sock.close()
+            sock = self._sock
             self._sock = None
-        for connection in self.connections.itervalues():
-            connection.close()
+            sname = sock.getsockname()
+            sock.close()
+            try:
+                concurrent.connect(sname)
+            except socket.error:
+                pass
         self.wait()
 
 
@@ -329,6 +343,8 @@ class Syncer(P2P):
 
     def close(self):
         self.running = False
+        for connection in self.connections.itervalues():
+            connection.close()
         super(Syncer, self).close()
 
     def wait(self):
