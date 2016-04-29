@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import logging
 import re
 import socket
+import os
 from collections import deque
 from contextlib import closing
 
@@ -230,6 +231,7 @@ class Client:
 
     def link(self, path):
         with self._prepare_upload() as asset:
+            path = os.path.abspath(path)
             self._connection.send(message.BindWrite(handle=asset._handle, linkpath=path))
             asset.wait_for_ok()
             return asset.wait_for_result()
