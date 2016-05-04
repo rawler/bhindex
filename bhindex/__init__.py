@@ -1,7 +1,11 @@
 from . import add, cat, config, links, scanner, syncer, tree, vacuum
 
 
-def main(args):
+def main(args=None):
+    if not args:
+        from sys import argv
+        args = argv[1:]
+
     from argparse import ArgumentError, ArgumentParser
     from distdb import DB
 

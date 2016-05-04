@@ -9,7 +9,7 @@ CODE_PATH = path.dirname(path.dirname(path.abspath(__file__)))
 if path.exists(path.join(CODE_PATH, 'bhindex.py')):
     BHINDEX_DEFAULT_PATH = CODE_PATH
 else:
-    BHINDEX_DEFAULT_PATH = '~/.bhindex'
+    BHINDEX_DEFAULT_PATH = path.expanduser('~/.bhindex')
 
 BHINDEX_PATH = environ.get('BHINDEX_PATH', BHINDEX_DEFAULT_PATH)
 
