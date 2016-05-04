@@ -9,7 +9,7 @@ from warnings import warn
 
 import concurrent
 from bithorde import parseHashIds, message
-from db import ValueSet
+from distdb import ValueSet
 
 if getattr(sys.stdout, 'encoding', 'UNDEFINED') is None:
     sys.stdout = codecs.getwriter('utf8')(sys.stdout)

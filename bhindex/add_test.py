@@ -4,7 +4,7 @@ from mock import MagicMock
 
 from . import add
 from .tree import Filesystem, Path as P
-from db import DB, ValueSet
+from distdb import DB, ValueSet
 from bithorde import Identifiers, proto
 
 hashIds1 = [proto.Identifier(type=proto.TREE_TIGER, id="0123456789abcdef")]

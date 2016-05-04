@@ -5,7 +5,7 @@ import os
 import os.path as path
 from time import time
 
-from db import ANY, ValueSet
+from distdb import ANY, ValueSet
 from bithorde import Client, parseConfig
 
 from .tree import Filesystem

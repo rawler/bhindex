@@ -3,7 +3,7 @@ from __future__ import absolute_import
 from base64 import b32encode, b32decode
 from warnings import warn
 
-from db import ValueSet
+from distdb import ValueSet
 from bithorde import message as proto
 
 

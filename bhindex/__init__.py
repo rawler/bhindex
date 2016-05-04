@@ -3,7 +3,7 @@ from . import add, cat, config, links, scanner, syncer, tree, vacuum
 
 def main(args):
     from argparse import ArgumentError, ArgumentParser
-    from db import DB
+    from distdb import DB
 
     cfg = config.read()
 

@@ -1,5 +1,5 @@
 from nose.tools import *
-from db.obj import ValueSet, Object
+from distdb.obj import ValueSet, Object
 
 @raises(TypeError)
 def test_ValueSet_void_ctor():

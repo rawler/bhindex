@@ -4,7 +4,7 @@ from warnings import warn
 
 from bithorde import Client, parseConfig
 from bhindex.util import cachedAssetLiveChecker, RepeatingTimer
-from db import ANY
+from distdb import ANY
 
 
 class StepCounter:

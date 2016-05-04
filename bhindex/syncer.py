@@ -1,4 +1,4 @@
-from db.syncer import Syncer
+from distdb.syncer import Syncer
 
 
 def parse_addr(addr):

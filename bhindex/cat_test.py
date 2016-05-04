@@ -3,7 +3,7 @@ from nose.tools import *
 from mock import Mock
 from hashlib import sha1
 
-from db import DB
+from distdb import DB
 from .cat import Cat, NotFoundError
 from .tree import Filesystem, NotFoundError as FNotFound, Path as P
 from .bithorde import proto

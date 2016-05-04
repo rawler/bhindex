@@ -4,7 +4,7 @@ from nose.tools import *
 from warnings import catch_warnings
 
 from .tree import *
-from db import DB, Object, ValueSet
+from distdb import DB, Object, ValueSet
 
 P = Path
 

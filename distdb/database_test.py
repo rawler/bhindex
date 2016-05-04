@@ -3,8 +3,8 @@ from shutil import rmtree
 from os import path
 
 from nose.tools import *
-from db.obj import ValueSet, Object
-from db.database import DB, Starts, ANY
+from distdb.obj import ValueSet, Object
+from distdb.database import DB, Starts, ANY
 
 
 class TempDir:

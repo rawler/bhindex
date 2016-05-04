@@ -2,8 +2,8 @@ from cStringIO import StringIO
 from mock import Mock, call
 from nose.tools import *
 
-from db.serialize import *
-from db.sync_pb2 import Hello
+from distdb.serialize import *
+from distdb.sync_pb2 import Hello
 
 hello_world = Hello(name='World')
 hello_other = Hello(name='Other World')

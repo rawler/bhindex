@@ -3,7 +3,7 @@ from collections import deque
 from google.protobuf.internal.encoder import MessageEncoder as _MessageEncoder
 
 from bithorde.protocol import decodeMessage
-from db import sync_pb2
+from distdb import sync_pb2
 
 
 class StringBuf(object):

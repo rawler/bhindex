@@ -6,8 +6,8 @@ from uuid import uuid4 as uuid
 import concurrent
 from concurrent import socket
 
-from db.serialize import MESSAGE_DECODER, MESSAGE_ENCODER, MessageQueue
-from db import sync_pb2
+from distdb.serialize import MESSAGE_DECODER, MESSAGE_ENCODER, MessageQueue
+from distdb import sync_pb2
 
 from time import time
 

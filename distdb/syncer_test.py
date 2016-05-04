@@ -1,8 +1,8 @@
 from nose.tools import *
 
-from db.serialize import *
-from db.syncer import *
-from db import DB, Object, ValueSet, syncer, sync_pb2
+from distdb.serialize import *
+from distdb.syncer import *
+from distdb import DB, Object, ValueSet, syncer, sync_pb2
 
 import concurrent
 

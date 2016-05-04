@@ -3,7 +3,7 @@ from os.path import normpath as osnormpath
 from time import time
 from warnings import warn
 
-from db import Object, Starts, ValueSet
+from distdb import Object, Starts, ValueSet
 from .bithorde import Identifiers, obj_from_ids
 log = getLogger('tree')
 

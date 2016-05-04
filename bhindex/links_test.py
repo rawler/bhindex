@@ -7,7 +7,7 @@ import itertools
 from nose.tools import *
 from mock import Mock, MagicMock
 
-from db import DB, Object, ValueSet
+from distdb import DB, Object, ValueSet
 from bithorde import proto
 
 
