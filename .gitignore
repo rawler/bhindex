@@ -4,10 +4,15 @@
 # Python-compiled files
 *.pyc
 
+# Build dirs
+/.pybuild
+/bhindex.egg-info
+/dist
+
 # Default db-name and my.config
 /bhindex.db
 /bhindex.sqlite*
-/my.config
+/bhindex.conf
 
 # Ignore test-directory for links
 /bhlinks
