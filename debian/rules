@@ -1,6 +1,15 @@
 #!/usr/bin/make -f
 
 export PYBUILD_NAME=bhindex
+TARGET=$(CURDIR)/debian/python-bhindex
 
 %:
 	dh $@ --with python2 --buildsystem=pybuild
+
+override_dh_installinit:
+	dh_installinit --name=bhindex-syncer
+
+override_dh_auto_install:
+	dh_auto_install
+	install -d $(TARGET)/etc
+	install $(TARGET)/usr/share/bhindex/sample.conf $(TARGET)/etc/bhindex.conf
