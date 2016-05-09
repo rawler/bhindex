@@ -1,0 +1,9 @@
+[Unit]
+Description=BHIndex syncer application
+
+[Service]
+ExecStartPre=/bin/bash -c 'chmod -R 777 /var/lib/bhindex; true'
+ExecStart=/usr/bin/bhindex --setuid nobody syncer
+
+[Install]
+WantedBy=multi-user.target

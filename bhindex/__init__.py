@@ -14,6 +14,7 @@ def main(args=None):
     CLI = ArgumentParser(description='BHIndex - Distributed Filesystem using BitHorde')
     CLI.add_argument('--database', '--db', dest="db", default=cfg.get('DB', 'file'),
                      help="Path to the SQLite database")
+    CLI.add_argument('--setuid', dest="suid", help="Set username before running")
     subparsers = CLI.add_subparsers(title="Sub-commands")
 
     Add = subparsers.add_parser('add', help='Add files to BitHorde and BHIndex')
@@ -43,6 +44,12 @@ def main(args=None):
     args = CLI.parse_args(args)
     try:
         db = DB(args.db)
+
+        if args.suid:
+            from pwd import getpwnam
+            from os import setuid
+            setuid(getpwnam(args.suid).pw_uid)
+
         args.main(args, cfg, db)
     except ArgumentError, e:
         CLI.error(e)

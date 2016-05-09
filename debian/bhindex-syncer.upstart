@@ -4,7 +4,7 @@ start on (filesystem and net-device-up IFACE!=lo)
 console log
 
 pre-start exec chmod -R 777 /var/lib/bhindex
-exec sudo -u nobody /usr/bin/bhindex syncer
+exec /usr/bin/bhindex --setuid nobody syncer
 post-start script
   sleep 1
   chmod -R 777 /var/lib/bhindex
