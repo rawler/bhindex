@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 
 export PYBUILD_NAME=bhindex
-TARGET=$(CURDIR)/debian/python-bhindex
+TARGET=$(CURDIR)/debian/bhindex
 
 %:
 	dh $@ --with python2 --with systemd --buildsystem=pybuild

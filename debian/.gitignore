@@ -1,1 +1,3 @@
-/python-bhindex*
+/bhindex*.debhelper*
+/bhindex.substvars
+/bhindex
