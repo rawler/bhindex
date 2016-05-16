@@ -5,7 +5,7 @@ import sys
 
 from argparse import ArgumentParser
 from bhindex import add, config
-from db import DB
+from distdb import DB
 
 if __name__ == '__main__':
     CLI = ArgumentParser(
@@ -14,4 +14,4 @@ if __name__ == '__main__':
     cfg = config.read()
     add.prepare_args(CLI, cfg)
     args = CLI.parse_args(sys.argv[1:])
-    add.main(args, config, DB(cfg.get('DB', 'file')))
+    add.main(args, cfg, DB(cfg.get('DB', 'file')))

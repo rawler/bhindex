@@ -5,7 +5,7 @@ import sys
 
 from argparse import ArgumentParser
 from bhindex import config, syncer
-from db import DB
+from distdb import DB
 
 if __name__ == '__main__':
     CLI = ArgumentParser(
