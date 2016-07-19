@@ -105,6 +105,9 @@ class Object(object):
     def keys(self):
         return self._dict.keys()
 
+    def empty(self):
+        return len(self._dict) == 0
+
     def matches(self, criteria):
         for key, value in criteria.iteritems():
             if key not in self._dict:

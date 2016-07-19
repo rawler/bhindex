@@ -16,6 +16,8 @@ if getattr(sys.stdout, 'encoding', 'UNDEFINED') is None:
 if getattr(sys.stderr, 'encoding', 'UNDEFINED') is None:
     sys.stderr = codecs.getwriter('utf8')(sys.stderr)
 
+ASSET_WAIT_FACTOR = 0.02
+
 
 class DelayedAction(object):
     def __init__(self, action):
@@ -30,21 +32,95 @@ class DelayedAction(object):
         self._scheduled = None
         self.action()
 
-ASSET_WAIT_FACTOR = 0.01
-
 
 def hasValidStatus(obj, t=time()):
-    try:
+    '''Returns True, False or None, respectively'''
+    try:  # New status
+        availability = obj['bh_availability']
+        available = float(availability.any(0))
+
+        if (availability.t + abs(available)) > t:
+            return available > 0
+        else:
+            return None
+    except:
+        pass
+
+    try:  # Legacy
         dbStatus = obj['bh_status']
         dbConfirmedStatus = obj['bh_status_confirmed']
-    except KeyError:
-        return None
-    stable = dbConfirmedStatus.t - dbStatus.t
-    nextCheck = dbConfirmedStatus.t + (stable * ASSET_WAIT_FACTOR)
-    if t < nextCheck:
-        return dbStatus.any() == 'True'
+
+        stable = dbConfirmedStatus.t - dbStatus.t
+        nextCheck = dbConfirmedStatus.t + (stable * ASSET_WAIT_FACTOR)
+        if t < nextCheck:
+            return dbStatus.any() == 'True'
+        else:
+            return None
+    except:
+        pass
+
+    return None
+
+
+def _object_availability(obj, t):
+    '''Returns (bool(lastCheck), time_since_check)'''
+    try:
+        dbAvailability = obj[u'bh_availability']
+        avail = float(dbAvailability.any(0))
+        time_since_check = t - dbAvailability.t
+        return avail, time_since_check
+    except:
+        pass
+
+    try:
+        dbStatus = obj[u'bh_status']
+        dbConfirmedStatus = obj[u'bh_status_confirmed']
+        time_since_check = (t - dbConfirmedStatus.t)
+        if dbStatus.any() == 'True':
+            avail = dbConfirmedStatus.t - dbStatus.t
+        else:
+            avail = -(dbConfirmedStatus.t - dbStatus.t)
+        return avail, time_since_check
+    except:
+        pass
+
+    return None, None
+
+
+def calc_new_availability(status_ok, avail, seconds_since_check):
+    if seconds_since_check is None:
+        seconds_since_check = 1800
+    if avail is None:
+        avail = 0
+
+    bonus = seconds_since_check * ASSET_WAIT_FACTOR
+
+    if status_ok:
+        return max(avail, 0) + bonus
     else:
-        return None
+        return min(avail, 0) - bonus
+
+
+def updateFolderAvailability(db, item, newAvail, t):
+    tgt = t + newAvail
+
+    for dir_mapping in item.get(u'directory', []):
+        dir_mapping = dir_mapping.split('/', 1)
+        if not len(dir_mapping) == 2:
+            continue
+        (dir_id, _) = dir_mapping
+        directory = db.get(dir_id)
+
+        if not directory.empty():
+            objAvail = directory.get(u'bh_availability', 0)
+            if objAvail:
+                objAvail = objAvail.t + float(objAvail.any(0))
+            else:
+                objAvail = 0
+            if tgt > objAvail:
+                directory[u'bh_availability'] = ValueSet(unicode(newAvail), t=t)
+                db.update(directory)
+                updateFolderAvailability(db, directory, newAvail, t)
 
 
 def cachedAssetLiveChecker(bithorde, objs, db=None, force=False):
@@ -68,6 +144,13 @@ def cachedAssetLiveChecker(bithorde, objs, db=None, force=False):
             status_ok = status and status.status == message.SUCCESS
             obj['bh_status'] = ValueSet((unicode(status_ok),), t=t)
             obj['bh_status_confirmed'] = ValueSet((unicode(t),), t=t)
+
+            avail, time_since_check = _object_availability(obj, t)
+            newAvail = calc_new_availability(status_ok, avail, time_since_check)
+            obj[u'bh_availability'] = ValueSet(unicode(newAvail), t=t)
+            if newAvail > 0:
+                updateFolderAvailability(db, obj, newAvail, t)
+
             if status and (status.size is not None):
                 if status.size > 2**40:
                     warn("Implausibly large asset-size: %r - %r" % (obj, status))
