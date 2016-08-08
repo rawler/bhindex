@@ -59,7 +59,7 @@ def cachedAssetLiveChecker(bithorde, objs, db=None, force=False):
                 concurrent.sleep()  # Not sleeping here could starve other greenlets
                 return obj, dbStatus
 
-        ids = parseHashIds(obj['xt'])
+        ids = parseHashIds(obj.get('xt', tuple()))
         if not ids:
             return obj, None
 
