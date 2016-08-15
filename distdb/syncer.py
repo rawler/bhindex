@@ -275,8 +275,14 @@ class P2P(object):
         return self._sock.getsockname()
 
     def wait(self):
-        self._server.wait()
-        self._connectThread.wait()
+        try:
+            self._server.wait()
+        except:
+            pass
+        try:
+            self._connectThread.wait()
+        except:
+            pass
 
     def close(self):
         if self._sock:
@@ -284,6 +290,8 @@ class P2P(object):
             self._sock = None
             sname = sock.getsockname()
             sock.close()
+
+            # Connect to break possibly hung accept()-call
             try:
                 concurrent.connect(sname)
             except socket.error:
@@ -349,4 +357,7 @@ class Syncer(P2P):
 
     def wait(self):
         super(Syncer, self).wait()
-        self._pusher.wait()
+        try:
+            self._pusher.wait()
+        except:
+            pass

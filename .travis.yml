@@ -3,7 +3,6 @@ python:
 - '2.7'
 env:
   global:
-  - CONCURRENT_EVENTLET=0
   - secure: N6yYHQvzkcL9qeyAphzNpFvD/djP87FRQfz+QFVmUnQUmYgJqq+iLaYYDu+LR6yslu/9vz2HvQAEoxq1VfwCC5TjR3Lsnh5u5rl6pncnvIhQYTSZuiUkp+SZe/pdkVejnHXuDC9oihhEqYw2O6YrT5Zj5kL1/ql7e3c7Gk0OmjI=
   - secure: BhwV+I76DmyW6wC/xFmiwV3R6L6SaEzm664d7kSvZiTYdJqPH+I912tmFc9javwUXrrZrYtyAqkUOvbRmEgYNEOERIWpdYFLZRupoZ4ankhEsIjjKBNQ/UoczNjHoMtuingkHErUK4xVRyZ0CN2fy8mPVkkTaqksdCzFHkz/XQ4=
   - secure: Hw5hR/zNzTm/B3ebNGtjyRwpj7uTRzlR6xZ17rBcxlStjgk8SVfXGpXtRrAHQEcEwani8jWgBo/hYdJevFVPFLuOQL41IpRnRYpnmXpDYlvQeXhgJv1j3/EkHoeyreMdgEMXg2ufhJUGIwzXywG5wofqXgZRpyJCzesRiSj7yBo=
@@ -27,6 +26,9 @@ env:
   - secure: gxuUzleY30Xef4YaG1QhhiE6LFQDAVulrjfLzGa2Ou20wv6peMlTq9fB8JkbfzzUVGqU+iABk+rnZU6yHrWMiGl6wv+3OIGjw28tadxCA066oHzajUF5qpIGPScP1c7r77oSu0UDUd/6qEXfeRWBI9udUIhpwIfxAHh1RoGlNoU=
   - secure: R39z4E6cdcoX8FwbLzlb6qt7Sc/GwqMXd6x1JGOHXxS5dLED7B37UJocBtOSzBLIs5eUmXa9FfT335XkOFCuk4iG6t4X78yMvGP6FRUJ+LRnej5s66lEdcGUnPMvBZt4lFVEPatYz1iFDbXcSUZImAG8zYdEYDfJfWUgZX7S1vw=
   - secure: D34JJbIXtCSpwekw2msBMupRG1Q02CvieUOlmtU91wlESxE5/lR8iShGAg+1gQp+Po9tJE8earBT70/fxgli4tjzn5XPWvea4Kj2VnOJWmBgrlVmO88rkydFG+AcvT5pbHzRpT6W7mf1vnrDpDT4KCf+6Cb36fyynvhZpDTXQvo=
+  matrix:
+  - CONCURRENT_EVENTLET=0
+  - CONCURRENT_EVENTLET=1
 install: pip install .
 script: nosetests
 before_script: ".travis/before_script.sh"
