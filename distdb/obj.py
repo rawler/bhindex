@@ -61,6 +61,9 @@ class Object(object):
             id = '%s:%s' % (prefix, id)
         return cls(id)
 
+    def dirty(self):
+        return self._dirty
+
     def update(self, other):
         for k, v in other.iteritems():
             self[k] = v
@@ -101,6 +104,12 @@ class Object(object):
 
     def iteritems(self):
         return self._dict.iteritems()
+
+    def keys(self):
+        return self._dict.keys()
+
+    def empty(self):
+        return len(self._dict) == 0
 
     def matches(self, criteria):
         for key, value in criteria.iteritems():
