@@ -1,3 +1,4 @@
+import logging
 from . import add, cat, config, links, scanner, syncer, tree, vacuum
 
 
@@ -15,6 +16,8 @@ def main(args=None):
     CLI.add_argument('--database', '--db', dest="db", default=cfg.get('DB', 'file'),
                      help="Path to the SQLite database")
     CLI.add_argument('--setuid', dest="suid", help="Set username before running")
+    CLI.add_argument('--verbose', '-v', action="store_true",
+                     help="write debug-level output")
     subparsers = CLI.add_subparsers(title="Sub-commands")
 
     Add = subparsers.add_parser('add', help='Add files to BitHorde and BHIndex')
@@ -43,6 +46,12 @@ def main(args=None):
 
     args = CLI.parse_args(args)
     try:
+        if args.verbose:
+            lvl = logging.DEBUG
+        else:
+            lvl = logging.INFO
+        logging.basicConfig(level=lvl, format="%(levelname)-8s %(asctime)-15s <%(name)s> %(message)s")
+
         db = DB(args.db)
 
         if args.suid:

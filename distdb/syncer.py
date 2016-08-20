@@ -11,9 +11,7 @@ from distdb import sync_pb2
 
 from time import time
 
-FORMAT = "%(levelname)-8s %(asctime)-15s <%(name)s> %(message)s"
 HANDSHAKE_TIMEOUT = 5
-logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
 
 class Deadline(object):
