@@ -29,7 +29,7 @@ def _sql_condition(k, v):
                             listid IN (SELECT listid FROM list WHERE value GLOB '%s*')"""
     any_query = """SELECT DISTINCT objid FROM map
                      NATURAL JOIN key
-                     WHERE key = ?"""
+                     WHERE key = ? AND listid IS NOT NULL"""
     absent_query = """SELECT DISTINCT objid FROM obj
                         WHERE NOT EXISTS (
                           SELECT 1 FROM map

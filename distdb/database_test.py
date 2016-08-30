@@ -117,6 +117,7 @@ class TestInRam():
 
         del db[o]
         assert_equal(db[o.id], Object(o.id))
+        assert_equal(list(db.query({"key": ANY})), [])
 
     def test_vacuum(self):
         db, o = self.db, self.o
