@@ -125,6 +125,15 @@ def object_string(obj):
 
 def hasValidStatus(obj, t=time()):
     '''Returns True, False or None, respectively'''
+    validity = validAvailability(obj, t)
+    if validity is None:
+        return None
+    else:
+        return validity > 0
+
+
+def validAvailability(obj, t=time()):
+    '''Returns the number of seconds the object is believed to have been available/unavailable, or None for outdated cache'''
     availability, time_since_check = _object_availability(obj, t)
 
     valid_for = (abs(availability or 0) ** AVAILABILITY_EXPONENT) - (time_since_check or 0)
@@ -132,7 +141,10 @@ def hasValidStatus(obj, t=time()):
     log = logging.getLogger('hasValidStatus')
     if valid_for > 0:
         log.debug("%s: Current availability %d valid for another %s", object_string(obj), availability, Duration(valid_for))
-        return availability > 0
+        if availability > 0:
+            return availability - time_since_check
+        else:
+            return availability + time_since_check
     else:
         log.debug("%s: Current availability %d invalid since %s", object_string(obj), availability, Duration(-valid_for))
         return None
