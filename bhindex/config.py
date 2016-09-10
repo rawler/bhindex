@@ -19,7 +19,7 @@ CONFIG_DEFAULTS = {
     },
     "BITHORDE": {
         "fusedir": "/tmp/bhfuse",
-        "address": "/tmp/bithorde",
+        "address": "/var/run/bithorde/socket",
         "pressure": "10",
         "upload_link": "false",
         "asset_timeout": "1000",
