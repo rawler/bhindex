@@ -4,6 +4,11 @@ from StringIO import StringIO
 from .util import *
 
 
+def test_alg():
+    for x in range(0, 7):
+        assert (x % 8) + 8 - (x % 8), 8
+
+
 def test_b32decode():
     assert_equal(b32decode(""), "")
     assert_equal(b32decode("JBSWUII="), "Hej!")
@@ -20,7 +25,7 @@ def test_fsize():
 
 def test_read_in_chunks():
     count = 0
-    for chunk in read_in_chunks(StringIO("AP"*21), 8):
+    for chunk in read_in_chunks(StringIO("AP" * 21), 8):
         if count < 5:
             assert_equal(chunk, "APAPAPAP")
         else:

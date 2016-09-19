@@ -8,8 +8,9 @@ TIGER_HASH_RE = re.compile(r'tiger:(\w{39})')
 
 
 def b32decode(string):
-    l = len(string)
-    string = string + "=" * (7-((l-1) % 8))  # Pad with = for b32decodes:s pleasure
+    trailing = len(string) % 8
+    if trailing:
+        string = string + "=" * (8 - trailing)  # Pad with = for b32decodes:s pleasure
     return _b32decode(string, True)
 
 
