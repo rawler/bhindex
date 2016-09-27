@@ -6,6 +6,7 @@ X-Python-Version: >= 2.6
 Priority: optional
 Build-Depends: debhelper (>= 9),
                dh-systemd,
+               dh-apport,
                dh-python,
                python-all (>= 2.6.6),
                python-docutils,
