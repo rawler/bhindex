@@ -2,3 +2,5 @@
 
 # Chmod data-dir
 chmod -R 0777 /var/lib/bhindex
+
+#DEBHELPER#

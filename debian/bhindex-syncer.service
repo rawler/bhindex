@@ -1,9 +1,12 @@
 [Unit]
 Description=BHIndex syncer application
+Wants=network.target
 
 [Service]
-ExecStartPre=/bin/bash -c 'chmod -R 777 /var/lib/bhindex; true'
+ExecStartPre=/bin/chmod -R 777 /var/lib/bhindex
 ExecStart=/usr/bin/bhindex --setuid nobody syncer
+Restart=always
+RestartSec=2
 
 [Install]
 WantedBy=multi-user.target
