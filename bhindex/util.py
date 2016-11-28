@@ -205,7 +205,11 @@ def updateFolderAvailability(db, item, newAvail, t):
 
         objAvail = directory.get(u'bh_availability', 0)
         if objAvail:
-            objAvail = objAvail.t + float(objAvail.any(0)) ** AVAILABILITY_EXPONENT
+            value = float(objAvail.any(0))
+            if value > 0:
+                objAvail = objAvail.t + value ** AVAILABILITY_EXPONENT
+            else:
+                objAvail = objAvail.t
         if tgt > objAvail:
             directory[u'bh_availability'] = ValueSet(unicode(newAvail), t=t)
             db.update(directory)
@@ -283,15 +287,16 @@ def cachedAssetLiveChecker(bithorde, objs, db=None, force=False):
     if db:
         commit_pending.fire()
 
-    log = logging.getLogger('cachedAssetLiveChecker')
     if assetsChecked:
         cacheUsePercent = cacheUse * 100 / assetsChecked
         availablePercent = available * 100 / assetsChecked
     else:
         cacheUsePercent = 100
         availablePercent = 100
-    log.debug("%d assets status-checked. %d cached statuses used (%d%%). %d available (%d%%).",
-              assetsChecked, cacheUse, cacheUsePercent, available, availablePercent)
+    logging \
+        .getLogger('cachedAssetLiveChecker') \
+        .debug("%d assets status-checked. %d cached statuses used (%d%%). %d available (%d%%).",
+               assetsChecked, cacheUse, cacheUsePercent, available, availablePercent)
 
 
 class Timed:
