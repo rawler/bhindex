@@ -28,17 +28,17 @@ class LinksWriter(object):
         return True
 
     def __init__(self, linksdir, bhfusedir):
-        self.linksdir = os.path.normpath(linksdir)
-        self.bhfuse = os.path.normpath(bhfusedir)
+        self.linksdir = os.path.normpath(linksdir).encode('utf8')
+        self.bhfuse = os.path.normpath(bhfusedir).encode('utf8')
 
     def __call__(self, p, t):
-        linkpath = path.join(self.linksdir, p)
-        tgt = path.join(self.bhfuse, t)
+        linkpath = path.join(self.linksdir, p.encode('utf8'))
+        tgt = path.join(self.bhfuse, t.encode('utf8'))
 
         if (not linkpath.startswith(self.linksdir)) or len(linkpath) <= len(self.linksdir):
             print "Warning! %s (%s) tries to break out of directory!" % (linkpath, tgt)
             return False
-        print u"Linking %s -> %s".encode('utf-8') % (p, t)
+        print u"Linking %s -> %s".encode('utf8') % (p, t)
 
         try:
             oldtgt = os.readlink(linkpath)
