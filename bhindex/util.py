@@ -123,6 +123,13 @@ def object_string(obj):
         return obj.id
 
 
+def utf8(s):
+    if isinstance(s, unicode):
+        return s.encode('utf-8')
+    else:
+        return s
+
+
 def hasValidStatus(obj, t=time()):
     '''Returns True, False or None, respectively'''
     validity = validAvailability(obj, t)

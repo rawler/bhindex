@@ -9,7 +9,7 @@ from distdb import ANY, ValueSet
 from bithorde import Client, parseConfig
 
 from .tree import Filesystem
-from .util import cachedAssetLiveChecker
+from .util import cachedAssetLiveChecker, utf8
 
 
 class LinksWriter(object):
@@ -28,17 +28,17 @@ class LinksWriter(object):
         return True
 
     def __init__(self, linksdir, bhfusedir):
-        self.linksdir = os.path.normpath(linksdir).encode('utf8')
-        self.bhfuse = os.path.normpath(bhfusedir).encode('utf8')
+        self.linksdir = utf8(os.path.normpath(linksdir))
+        self.bhfuse = utf8(os.path.normpath(bhfusedir))
 
     def __call__(self, p, t):
-        linkpath = path.join(self.linksdir, p.encode('utf8'))
-        tgt = path.join(self.bhfuse, t.encode('utf8'))
+        linkpath = path.join(self.linksdir, utf8(p))
+        tgt = path.join(self.bhfuse, utf8(t))
 
         if (not linkpath.startswith(self.linksdir)) or len(linkpath) <= len(self.linksdir):
             print "Warning! %s (%s) tries to break out of directory!" % (linkpath, tgt)
             return False
-        print u"Linking %s -> %s".encode('utf8') % (p, t)
+        print "Linking %s -> %s" % (p, t)
 
         try:
             oldtgt = os.readlink(linkpath)

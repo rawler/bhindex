@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from tempfile import mkdtemp
 from shutil import rmtree
 from os import path
@@ -38,7 +40,9 @@ def test_LinksWriter():
         w = links.LinksWriter(d.name, "/tmp/bhfuse")
         d.assert_missing("some/path")
         w("some/path", "magnet:?urn=something")
-        d.assert_points_to("some/path", "/tmp/bhfuse/magnet:?urn=something")
+        d.assert_missing("some/path")
+        w("some/åäö/path", "magnet:?urn=something")
+        d.assert_points_to("some/åäö/path", "/tmp/bhfuse/magnet:?urn=something")
         w("some/path", "magnet:?urn=something")
         d.assert_points_to("some/path", "/tmp/bhfuse/magnet:?urn=something")
         w("some/path", "magnet:?urn=something_else")
