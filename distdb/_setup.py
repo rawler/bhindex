@@ -31,7 +31,7 @@ def create_DB(conn):
         CREATE TABLE IF NOT EXISTS list (
             itemid INTEGER PRIMARY KEY AUTOINCREMENT,
             listid INTEGER NOT NULL,
-            value NOT NULL,
+            value TEXT NOT NULL,
             CONSTRAINT unique_list_value UNIQUE (listid, value) ON CONFLICT IGNORE
         );
         CREATE INDEX IF NOT EXISTS list_id ON list (listid);
