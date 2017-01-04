@@ -48,23 +48,34 @@ class Directory(Node):
             if len(objs) > 1:
                 return Split(self, objs, name)
             else:
-                return File(self, objs[0])
+                return File(self, next(iter(objs)))
         else:
             return Directory(self, objs)
 
     def ls(self, offset=0):
-        d = dict()
         for dirobj in self.objs:
-            for child in self.db.query({u'directory': Starts("%s/" % dirobj.id)}):
-                for dirent in child[u'directory']:
-                    try:
-                        dir, name = split_directory_entry(dirent)
-                    except ValueError:
-                        warn("Malformed directory for %s: %s" % (child.id, dirent))
-                    if dir == dirobj.id:
-                        d.setdefault(name, []).append(child)
-        for name, objs in sorted(d.iteritems())[offset:]:
-            yield name, self._map(objs, name)
+            current_name = None
+            current_objs = set()
+            crit = {'directory': Starts("%s/" % dirobj.id)}
+            for dirent, child in self.db.query_keyed(crit, key="+directory", offset=offset, fields=('directory', 'xt')):
+                try:
+                    dir, name = split_directory_entry(dirent)
+                except ValueError:
+                    warn("Malformed directory for %s: %s" % (child.id, dirent))
+                    continue
+                if dir != dirobj.id:
+                    continue
+
+                if name == current_name:
+                    current_objs.add(child)
+                else:
+                    if current_name:
+                        yield current_name, self._map(current_objs, current_name)
+                    current_name = name
+                    current_objs = set([child])
+
+            if current_name:
+                yield current_name, self._map(current_objs, current_name)
 
     def __iter__(self):
         return self.ls()
