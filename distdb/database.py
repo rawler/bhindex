@@ -46,7 +46,7 @@ def _sql_condition(k, v):
         return (equal_query, (k, v))
 
 
-def _sql_for_criteria(crit):
+def _sql_for_query(crit):
     sql = []
     params = []
     for k, v in crit.iteritems():
@@ -55,6 +55,34 @@ def _sql_for_criteria(crit):
         params += new_params
 
     return " INTERSECT ".join(sql), params
+
+
+def _parse_sort(sort):
+    direction, key = sort[:1], sort[1:]
+    if direction == '+':
+        return "ASC", key
+    elif direction == '-':
+        return "DESC", key
+    else:
+        raise ValueError("Direction specifier %s in sort=%s is not valid" % (direction, sort))
+
+
+def _sql_for_keyed_query(crit, key, offset):
+    direction, key = _parse_sort(key)
+    selection, params = _sql_for_query(crit)
+    if selection:
+        selection = "(%s) NATURAL JOIN map" % selection
+    else:
+        selection = "map"
+    selection = """SELECT objid, value FROM %s
+NATURAL JOIN key
+NATURAL JOIN list
+    WHERE key = '%s' ORDER BY value, objid %s""" % (selection, key, direction)
+
+    if offset:
+        selection = selection + (" LIMIT -1 OFFSET %d" % offset)
+
+    return selection, params
 
 
 class DB(object):
@@ -192,19 +220,25 @@ class DB(object):
         return newlistid
 
     def query_ids(self, criteria):
-        query, params = _sql_for_criteria(criteria)
+        query, params = _sql_for_query(criteria)
         query = "SELECT obj FROM obj NATURAL JOIN (%s)" % query
         for objid, in self._query_all(query, params):
             yield objid
 
     def query_raw_ids(self, criteria):
-        query, params = _sql_for_criteria(criteria)
+        query, params = _sql_for_query(criteria)
         for objid, in self._query_all(query, params):
             yield objid
 
     def query(self, criteria, fields=None):
-        for objid in self.query_raw_ids(criteria):
+        query, params = _sql_for_query(criteria)
+        for objid, in self._query_all(query, params):
             yield self.get(objid, fields)
+
+    def query_keyed(self, criteria, key, offset=0, fields=None):
+        query, params = _sql_for_keyed_query(criteria, key, offset)
+        for objid, key_value in self._query_all(query, params):
+            yield key_value, self.get(objid, fields)
 
     def update(self, obj):
         _dict = obj._dict

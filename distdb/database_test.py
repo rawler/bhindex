@@ -77,6 +77,18 @@ class TestInRam():
         assert_in(self.o, list(self.db.query({u'apa': None})))
         assert_in(self.o, list(self.db.query({u'key': Starts('Test')})))
 
+    def test_query_keyed(self):
+        p1 = self.db.get("some_id")
+        p2 = self.db.update(Object("other_id", init={u"key": ValueSet(u"Other Person", t=1)}))
+        p3 = self.db.update(Object("3d_id", init={u"key": ValueSet(u"First Person", t=1)}))
+
+        assert_equals(list(self.db.query_keyed({}, "+key")), [
+            (u"And alternatives", p1),
+            (u"First Person", p3),
+            (u"Other Person", p2),
+            (u"Test Person", p1),
+        ])
+
     def test_query_objids(self):
         assert_not_in(self.o.id, self.db.query_ids({u'key': 'Not here'}))
         assert_in(self.o.id, list(self.db.query_ids({u'key': u'Test Person'})))
