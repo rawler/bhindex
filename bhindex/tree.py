@@ -52,7 +52,7 @@ class Directory(Node):
         else:
             return Directory(self, objs)
 
-    def ls(self):
+    def ls(self, offset=0):
         d = dict()
         for dirobj in self.objs:
             for child in self.db.query({u'directory': Starts("%s/" % dirobj.id)}):
@@ -63,7 +63,7 @@ class Directory(Node):
                         warn("Malformed directory for %s: %s" % (child.id, dirent))
                     if dir == dirobj.id:
                         d.setdefault(name, []).append(child)
-        for name, objs in sorted(d.iteritems()):
+        for name, objs in sorted(d.iteritems())[offset:]:
             yield name, self._map(objs, name)
 
     def __iter__(self):
@@ -135,8 +135,8 @@ class Split(Directory):
     def _entry(self, id):
         return "%s%s" % (id.replace("/", "_"), self._ext)
 
-    def ls(self):
-        for obj in self.objs:
+    def ls(self, offset=0):
+        for obj in self.objs[offset:]:
             name = self._entry(obj.id)
             yield name, self._map((obj,), name)
 
@@ -151,7 +151,7 @@ class Split(Directory):
         for obj in self.objs:
             ename = self._entry(obj.id)
             if ename == name:
-                dir = ValueSet(obj['directory']-purge_list, t=t)
+                dir = ValueSet(obj['directory'] - purge_list, t=t)
                 obj['directory'] = dir
                 self.db.update(obj)
 
