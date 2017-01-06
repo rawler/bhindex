@@ -18,13 +18,13 @@ test_asset_ids = proto.Identifier(
 
 def test_catter():
     fs = Filesystem(DB(':memory:'))
-    fs.root().add_file('zeroes', [test_asset_ids])
+    fs.root().add_file('zeroes', [test_asset_ids], 130)
 
     asset = Mock()
     asset.__enter__ = Mock(return_value=asset)
     asset.__exit__ = Mock(return_value=False)
-    asset.status = Mock(return_value=proto.AssetStatus(size=1024*1024, status=proto.SUCCESS))
-    asset.__iter__ = Mock(return_value=('\x00'*(128*1024) for _ in range(8)))
+    asset.status = Mock(return_value=proto.AssetStatus(size=1024 * 1024, status=proto.SUCCESS))
+    asset.__iter__ = Mock(return_value=('\x00' * (128 * 1024) for _ in range(8)))
 
     bithorde = Mock()
     bithorde.open = Mock(return_value=asset)

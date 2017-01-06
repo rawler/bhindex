@@ -4,7 +4,7 @@ from mock import MagicMock
 
 from . import add
 from .tree import Filesystem, Path as P
-from distdb import DB, ValueSet
+from distdb import DB
 from bithorde import Identifiers, proto
 
 hashIds1 = [proto.Identifier(type=proto.TREE_TIGER, id="0123456789abcdef")]
@@ -12,7 +12,7 @@ hashIds2 = [proto.Identifier(type=proto.TREE_TIGER, id="abcdef0123456789")]
 
 
 def test_add_success():
-    dummy_uploader = MagicMock(return_value=hashIds1)
+    dummy_uploader = MagicMock(return_value=MagicMock(ids=hashIds1, size=468))
 
     fs = Filesystem(DB(':memory:'))
 
@@ -31,7 +31,7 @@ def test_add_success():
 
 def test_add_exists_without_force():
     fs = test_add_success()
-    dummy_uploader = MagicMock(return_value=hashIds2)
+    dummy_uploader = MagicMock(return_value=MagicMock(ids=hashIds2, size=327))
 
     adder = add.AddController(fs, dummy_uploader)
     with assert_raises(add.FileExistsError):
@@ -44,7 +44,7 @@ def test_add_exists_with_force():
     fs = test_add_success()
     old_obj = fs.lookup(P("Movies/midsummer.mp4")).obj
 
-    dummy_uploader = MagicMock(return_value=hashIds2)
+    dummy_uploader = MagicMock(return_value=MagicMock(ids=hashIds2, size=327))
 
     adder = add.AddController(fs, dummy_uploader)
     uploaded = adder("Movies/midsummer.mp4", mtime=0, force=True)

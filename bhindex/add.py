@@ -42,7 +42,7 @@ class AddController(object):
 
         old_file = self._check_file_exists(treepath, mtime, force)
 
-        ids = self.bhupload(path)
+        status = self.bhupload(path)
 
         # Wrap in transaction, all or nothing, and flush on success
         with self.fs.transaction():
@@ -50,7 +50,7 @@ class AddController(object):
             fname = treepath[-1]
             if old_file:
                 directory.rm(fname, t=t)
-            f = directory.add_file(fname, ids, t=t)
+            f = directory.add_file(fname, status.ids, status.size, t=t)
 
         self.added.add((path, f))
         return f

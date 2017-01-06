@@ -173,7 +173,7 @@ class UploadAsset(BaseAsset):
         if result.status != message.SUCCESS:
             stat = message._STATUS.values_by_number[result.status].name
             raise Exception("Upload start failed with %s" % stat)
-        return result.ids
+        return result
 
     def _processStatus(self, status):
         self.progress = status.availability

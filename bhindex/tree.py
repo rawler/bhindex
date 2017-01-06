@@ -4,7 +4,7 @@ from time import time
 from warnings import warn
 
 from distdb import Object, Starts, ValueSet
-from .bithorde import Identifiers, obj_from_ids
+from .bithorde import Identifiers
 log = getLogger('tree')
 
 
@@ -25,6 +25,9 @@ class File(Node):
 
     def ids(self):
         return Identifiers(self.obj['xt'])
+
+    def size(self):
+        return int(self.obj.any(u'filesize', 0))
 
     def __eq__(self, other):
         return self.obj == other.obj
@@ -113,9 +116,9 @@ class Directory(Node):
             obj[u'directory'] = dirs
             self.db.update(obj)
 
-    def add_file(self, name, ids, t=None):
+    def add_file(self, name, ids, size, t=None):
         ids = Identifiers(ids)
-        f = File(self, obj_from_ids(self.db, ids))
+        f = File(self, ids.add_to(self.db, size))
 
         self.link(name, f, t=t)
         return f

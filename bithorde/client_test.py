@@ -37,6 +37,11 @@ def test_connection():
 
 
 class TestClient(object):
+    ids = [message.Identifier(
+        type=message.TREE_TIGER,
+        id='g"\xb6=\x1a8\x97i\xd9\xb3\xfd\xe0\xd0R"\xd8\xc9D\x0e\xc0"\xaeLQ')
+    ]
+
     def setup(self):
         s = Server()
         self.c = Client(dict(
@@ -53,23 +58,24 @@ class TestClient(object):
     def test_upload(self):
         def server_side():
             bind = self.s.next()
-            assert_equals(bind.size, 130*1024)
+            assert_equals(bind.size, 130 * 1024)
             self.s.send(message.AssetStatus(status=message.SUCCESS))
             uploaded = 0
             for seg in self.s:
-                if uploaded < 128*1024:
-                    assert_equals(len(seg.content), 64*1024)
+                if uploaded < 128 * 1024:
+                    assert_equals(len(seg.content), 64 * 1024)
                     uploaded += len(seg.content)
                 else:
-                    assert_equals(len(seg.content), 2*1024)
-                    self.s.send(message.AssetStatus(status=message.SUCCESS, ids=[
-                        message.Identifier(type=message.TREE_TIGER, id='g"\xb6=\x1a8\x97i\xd9\xb3\xfd\xe0\xd0R"\xd8\xc9D\x0e\xc0"\xaeLQ')
-                    ]))
+                    assert_equals(len(seg.content), 2 * 1024)
+                    self.s.send(message.AssetStatus(
+                        status=message.SUCCESS,
+                        ids=self.ids,
+                        size=130 * 1024,
+                    ))
                     break
         spawn(server_side)
 
-        f = StringIO("A"*130*1024)
-        ids = self.c.upload(f)
-        assert_items_equal(ids, [
-            message.Identifier(type=message.TREE_TIGER, id='g"\xb6=\x1a8\x97i\xd9\xb3\xfd\xe0\xd0R"\xd8\xc9D\x0e\xc0"\xaeLQ')
-        ])
+        f = StringIO("A" * 130 * 1024)
+        status = self.c.upload(f)
+        assert_items_equal(status.ids, self.ids)
+        assert_equal(status.size, 130 * 1024)

@@ -10,7 +10,7 @@ from bithorde import message as proto
 def _pad_base32(b32):
     overflow = len(b32) % 5
     if overflow:
-        return b32 + '=' * (5-overflow)
+        return b32 + '=' * (5 - overflow)
     else:
         return b32
 
@@ -46,10 +46,10 @@ class Identifiers(frozenset):
     def proto_ids(self):
         return tuple(self._to_proto_id(xt) for xt in self)
 
+    def add_to(self, db, size, t=None):
+        xt = ValueSet(self.xt(), t=t)
+        obj = db[','.join(sorted(xt))]
+        obj[u'xt'] = xt
+        obj[u'filesize'] = ValueSet(unicode(size), t)
 
-def obj_from_ids(db, ids, t=None):
-    xt = ValueSet(ids.xt(), t=t)
-    obj = db[','.join(sorted(xt))]
-    obj[u'xt'] = xt
-
-    return obj
+        return obj
