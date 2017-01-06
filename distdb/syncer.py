@@ -178,19 +178,30 @@ class SyncConnection(object):
             concurrent.sleep()
 
     def db_push(self):
-        last_serial = self._last_serial_sent
-        msgs = list()
-        for obj, key, tstamp, serial, values in self.db.get_public_mappings_after(last_serial):
-            if serial in self._echo_prevention:
-                self._echo_prevention.discard(serial)
-            else:
-                msgs.append(sync_pb2.Update(obj=obj, key=key, tstamp=int(tstamp), values=values))
-            last_serial = max(last_serial, serial)
-        msg_groups = [['update', msgs]]
-        if last_serial > self._last_serial_sent:
-            msg_groups.append(['checkpoint', sync_pb2.Checkpoint(serial=last_serial)])
-        self._sendmsg(*msg_groups)
+        def poll_updates(last_serial):
+            updates = list()
+            for obj, key, tstamp, serial, values in self.db.get_public_mappings_after(last_serial):
+                if serial in self._echo_prevention:
+                    self._echo_prevention.discard(serial)
+                else:
+                    updates.append(sync_pb2.Update(obj=obj, key=key, tstamp=int(tstamp), values=values))
+                last_serial = max(last_serial, serial)
+            return updates, last_serial
+
+        def send_messages(updates, last_serial):
+            msg_groups = list()
+            if updates:
+                msg_groups.append(['update', updates])
+            if last_serial > self._last_serial_sent:
+                msg_groups.append(['checkpoint', sync_pb2.Checkpoint(serial=last_serial)])
+            if msg_groups:
+                self._sendmsg(*msg_groups)
+
+        updates, last_serial = poll_updates(self._last_serial_sent)
+        send_messages(updates, last_serial)
         self._last_serial_sent = last_serial
+
+        return len(updates)
 
 
 class KeyHolder(object):
@@ -322,7 +333,7 @@ class Syncer(P2P):
             peername = conn.peername
             logging.info("connection established with %s (%s)", peername, peer)
             if not set_session(peername, conn):
-                logging.info('%s already connected. Dropping.',  peername)
+                logging.info('%s already connected. Dropping.', peername)
                 return
 
             try:
@@ -334,10 +345,11 @@ class Syncer(P2P):
 
     def _db_push(self, db_poll_interval):
         while self.running:
+            sent = 0
             with self._db.transaction():
                 for conn in self.connections.values():
                     try:
-                        conn.db_push()
+                        sent += conn.db_push()
                     except IOError:
                         logging.debug("Failed to push to %s, disconnecting", conn.peername)
                         self.connections.pop(conn.peername, None)
@@ -345,7 +357,10 @@ class Syncer(P2P):
                         logging.exception("%s push hit error", conn.peername)
                         self.connections.pop(conn.peername, None)
                         conn.shutdown()
-            concurrent.sleep(db_poll_interval)
+            if sent:
+                concurrent.sleep(0)
+            else:
+                concurrent.sleep(db_poll_interval)
 
     def close(self):
         self.running = False
