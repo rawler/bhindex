@@ -61,15 +61,17 @@ class DB(object):
     ANY = ANY
     Starts = Starts
 
-    def __init__(self, path, sync=True):
+    def __init__(self, path):
         self.conn = sqlite3.connect(
             path, timeout=60, isolation_level='DEFERRED', check_same_thread=False)
-        self.conn.execute("PRAGMA synchronous = %s" %
-                          (sync and 'NORMAL' or 'OFF'))
         self.cursor = self.conn.cursor()
         create_DB(self.conn)
         self.__idCache = dict()
         self.lock = concurrent.ThreadLock()
+
+    def set_volatile(self, v):
+        sync = v and 'OFF' or 'NORMAL'
+        self.conn.execute("PRAGMA synchronous = %s" % sync)
 
     @contextlib.contextmanager
     def transaction(self):

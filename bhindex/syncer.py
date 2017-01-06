@@ -15,12 +15,13 @@ def parse_addr(addr):
 
 
 def prepare_args(parser, config):
-    parser.add_argument("-s", "--no-sync", action="store_false", dest="sync", default=True,
+    parser.add_argument("--volatile", action="store_true", dest="volatile", default=False,
                         help="Improve I/O write-performance at expense of durability. Might be worth it during initial sync.")
     parser.set_defaults(main=main)
 
 
 def main(args, config, db):
+    db.set_volatile(args.volatile)
     sync_config = config.items('LIVESYNC')
     connect_addresses = set(parse_addr(addr)
                             for addr in sync_config['connect'].split(","))
