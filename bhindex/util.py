@@ -9,7 +9,7 @@ from warnings import warn
 
 import concurrent
 from bithorde import parseHashIds, message
-from distdb import ValueSet
+from distdb import Transaction, ValueSet
 
 if getattr(sys.stdout, 'encoding', 'UNDEFINED') is None:
     sys.stdout = codecs.getwriter('utf8')(sys.stdout)
@@ -256,33 +256,23 @@ def _cachedCheckAsset(bithorde, obj, t):
         return obj, dbStatus
 
 
-def cachedAssetLiveChecker(bithorde, objs, db=None, force=False):
-    t = time()
-    if db:
-        commit_pending = DelayedAction(db.commit)
-
+def _scan_assets(bithorde, objs, transaction, checker, t):
     assetsChecked = Counter()
     cacheUse = Counter()
     available = Counter()
-
-    if force:
-        def checker(obj):
-            return _checkAsset(bithorde, obj, t)
-    else:
-        def checker(obj):
-            return _cachedCheckAsset(bithorde, obj, t)
 
     for obj, status in bithorde.pool().imap(checker, objs):
         assetsChecked.inc()
 
         if obj.dirty():
-            if db:
+            if transaction:
+                db = transaction.db
                 new_avail = float(obj.any('bh_availability'))
                 if new_avail > 0:
-                    updateFolderAvailability(db, obj, new_avail, t)
+                    updateFolderAvailability(transaction.db, obj, new_avail, t)
 
                 db.update(obj)
-                commit_pending.schedule(2)
+                transaction.yield_from(2)
         else:
             cacheUse.inc()
 
@@ -290,9 +280,6 @@ def cachedAssetLiveChecker(bithorde, objs, db=None, force=False):
             available.inc()
 
         yield obj, status
-
-    if db:
-        commit_pending.fire()
 
     if assetsChecked:
         cacheUsePercent = cacheUse * 100 / assetsChecked
@@ -304,6 +291,25 @@ def cachedAssetLiveChecker(bithorde, objs, db=None, force=False):
         .getLogger('cachedAssetLiveChecker') \
         .debug("%d assets status-checked. %d cached statuses used (%d%%). %d available (%d%%).",
                assetsChecked, cacheUse, cacheUsePercent, available, availablePercent)
+
+
+def cachedAssetLiveChecker(bithorde, objs, db=None, force=False):
+    t = time()
+
+    if force:
+        def checker(obj):
+            return _checkAsset(bithorde, obj, t)
+    else:
+        def checker(obj):
+            return _cachedCheckAsset(bithorde, obj, t)
+
+    if db:
+        with db.transaction(Transaction.IMMEDIATE) as transaction:
+            for x in _scan_assets(bithorde, objs, transaction, checker, t):
+                yield x
+    else:
+        for x in _scan_assets(bithorde, objs, None, checker, t):
+            yield x
 
 
 class Timed:
