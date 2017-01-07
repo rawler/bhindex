@@ -4,7 +4,7 @@ from os import path
 
 from nose.tools import *
 from distdb.obj import ValueSet, Object
-from distdb.database import DB, Starts, ANY
+from distdb.database import ANY, DB, Starts
 
 
 class TempDir:
@@ -27,9 +27,9 @@ def test_DB_file_backed():
         obj1 = db1.get('aia')
         assert_is_not_none(path.exists)
         obj1[u'name'] = ValueSet(u'Test Person')
-        db1.update(obj1)
-        assert_is_not_none(db1['aia'][u'name'])
-        db1.commit()
+        with db1.transaction() as t:
+            t.update(obj1)
+            assert_is_not_none(db1['aia'][u'name'])
 
         db2 = DB(db_path)
         obj2 = db2[u'aia']
@@ -41,12 +41,14 @@ class TestInRam():
         self.db = db = DB(':memory:')
         self.o = o = db.get('some_id')
         o[u'key'] = ValueSet([u'Test Person', u'And alternatives'], t=1)
-        db.update(o)
+        with self.db.transaction() as t:
+            t.update(o)
 
     def test_simple_object_put_get(self):
         assert_is_not_none(self.o)
         self.o[u'name'] = ValueSet(u'Test Person')
-        self.db.update(self.o)
+        with self.db.transaction() as t:
+            t.update(self.o)
         assert_equal(self.db[self.o.id], self.o)
 
     def test_get_with_fields(self):
@@ -56,18 +58,18 @@ class TestInRam():
 
     def test_failed_transaction(self):
         try:
-            with self.db.transaction():
+            with self.db.transaction() as t:
                 self.o[u'name'] = ValueSet(u'Test Person')
-                self.db.update(self.o)
+                t.update(self.o)
                 raise KeyError
         except:
             pass
         assert_not_in(u'name', self.db[self.o.id])
 
     def test_success_transaciton(self):
-        with self.db.transaction():
+        with self.db.transaction() as t:
             self.o[u'name'] = ValueSet(u'Test Person')
-            self.db.update(self.o)
+            t.update(self.o)
         assert_in(u'name', self.db[self.o.id])
 
     def test_query(self):
@@ -79,8 +81,9 @@ class TestInRam():
 
     def test_query_keyed(self):
         p1 = self.db.get("some_id")
-        p2 = self.db.update(Object("other_id", init={u"key": ValueSet(u"Other Person", t=1)}))
-        p3 = self.db.update(Object("3d_id", init={u"key": ValueSet(u"First Person", t=1)}))
+        with self.db.transaction() as t:
+            p2 = t.update(Object("other_id", init={u"key": ValueSet(u"Other Person", t=1)}))
+            p3 = t.update(Object("3d_id", init={u"key": ValueSet(u"First Person", t=1)}))
 
         assert_equals(list(self.db.query_keyed({}, "+key")), [
             (u"And alternatives", p1),
@@ -97,32 +100,38 @@ class TestInRam():
 
     def test_update_empty(self):
         self.o[u'key'] = ValueSet([])
-        self.db.update(self.o)
+        with self.db.transaction() as t:
+            t.update(self.o)
         o = self.db.get(self.o.id)
         assert_not_in(u'key', o)
 
     def test_update_with_same_t(self):
         self.o[u'key'] = ValueSet([u'Something completely differrent'], t=1)
-        self.db.update(self.o)
+        with self.db.transaction() as t:
+            t.update(self.o)
         assert_equal(self.db[self.o.id][u'key'], ValueSet([u'Something completely differrent'], t=1))
 
     def test_update_attr(self):
         db, o = self.db, self.o
-        db.update_attr(o.id, 'key', ValueSet([], t=1))
-        assert_equal(db.get(o.id), o)
-        db.update_attr(o.id, 'key', ValueSet([u'apa']))
-        assert_equal(db.get(o.id)[u'key'], ValueSet([u'apa']))
-        db.update_attr(o.id, 'key', ValueSet(o[u'key']))
-        assert_equal(db.get(o.id)[u'key'], o[u'key'])
+        with self.db.transaction() as t:
+            t.update_attr(o.id, 'key', ValueSet([], t=1))
+            assert_equal(db.get(o.id), o)
+            t.update_attr(o.id, 'key', ValueSet([u'apa']))
+            assert_equal(db.get(o.id)[u'key'], ValueSet([u'apa']))
+            t.update_attr(o.id, 'key', ValueSet(o[u'key']))
+            assert_equal(db.get(o.id)[u'key'], o[u'key'])
 
     def test_del_attr(self):
         db, o1 = self.db, self.o
-        db.update_attr(o1.id, 'deleted', ValueSet([u'apa'], t=1))
-        o2 = db.get(o1.id)
-        assert_equal(o2[u'deleted'], ValueSet([u'apa']))
-        del o2[u'deleted']
-        db.update(o2)
-        assert_equal(db.get(o1.id), o1)
+        with self.db.transaction() as t:
+            t.update_attr(o1.id, 'deleted', ValueSet([u'apa'], t=1))
+
+        with self.db.transaction() as t:
+            o2 = db.get(o1.id)
+            assert_equal(o2[u'deleted'], ValueSet([u'apa']))
+            del o2[u'deleted']
+            t.update(o2)
+            assert_equal(db.get(o1.id), o1)
 
     def test_del_obj(self):
         db, o = self.db, self.o

@@ -7,7 +7,7 @@ import concurrent
 from concurrent import socket
 
 from distdb.serialize import MESSAGE_DECODER, MESSAGE_ENCODER, MessageQueue
-from distdb import sync_pb2
+from distdb import sync_pb2, Transaction
 
 from time import time
 
@@ -48,23 +48,24 @@ class SyncConnection(object):
 
     def handshake(self):
         assert not self.peername
+        self._sendmsg(['hello', sync_pb2.Hello(name=self.name)])
+        peerhello = self.read_msg(timeout=HANDSHAKE_TIMEOUT)
+        if not peerhello:
+            raise StopIteration
+        self.peername = peerhello.name
         with self.db.transaction():
-            self._sendmsg(['hello', sync_pb2.Hello(name=self.name)])
-            peerhello = self.read_msg(timeout=HANDSHAKE_TIMEOUT)
-            if not peerhello:
-                raise StopIteration
-            self.peername = peerhello.name
             self._last_serial_received = self.db.get_sync_state(self.peername)['last_received']
             self._sendmsg(['setup', sync_pb2.Setup(
                 last_serial_received=self._last_serial_received,
                 last_serial_in_db=self.db.last_serial(),
             )])
 
-            self._log = logging.getLogger(self.peername)
+        self._log = logging.getLogger(self.peername)
 
-            peersetup = self.read_msg(timeout=HANDSHAKE_TIMEOUT)
-            if not peersetup:
-                raise StopIteration
+        peersetup = self.read_msg(timeout=HANDSHAKE_TIMEOUT)
+        if not peersetup:
+            raise StopIteration
+        with self.db.transaction():
             if peersetup.last_serial_received <= self.db.last_serial():
                 self._last_serial_sent = peersetup.last_serial_received
             else:
@@ -75,8 +76,8 @@ class SyncConnection(object):
                 self._log.warn("detecting remote db was reset")
                 self._last_serial_received = 0
 
-            self._log.info("%s is requesting from my #%d (is %d behind) ", self.peername, self._last_serial_sent, self.db.last_serial() - self._last_serial_sent)
-            self._log.info("%s is currently at #%d (I'm %d behind)", self.peername, peersetup.last_serial_in_db, peersetup.last_serial_in_db - self._last_serial_received)
+        self._log.info("%s is requesting from my #%d (is %d behind) ", self.peername, self._last_serial_sent, self.db.last_serial() - self._last_serial_sent)
+        self._log.info("%s is currently at #%d (I'm %d behind)", self.peername, peersetup.last_serial_in_db, peersetup.last_serial_in_db - self._last_serial_received)
 
         return self
 
@@ -141,14 +142,14 @@ class SyncConnection(object):
     def closed(self):
         return self._sock is None
 
-    def _process_updates(self, chunk):
+    def _process_updates(self, chunk, transaction):
         chunk_applied = 0
         chunk_had = 0
         last_serial = self._last_serial_received
         for msg in chunk:
             if isinstance(msg, sync_pb2.Update):
                 chunk_had += 1
-                serial = self.db.update_attr(msg.obj, msg.key, ValueSet(msg.values, t=msg.tstamp))
+                serial = transaction.update_attr(msg.obj, msg.key, ValueSet(msg.values, t=msg.tstamp))
                 if serial:
                     self._echo_prevention.add(serial)
                     chunk_applied += 1
@@ -167,8 +168,8 @@ class SyncConnection(object):
     def _step(self):
         chunk = self.read_chunk()
         if chunk:
-            with self.db.transaction():
-                self._process_updates(chunk)
+            with self.db.lock, self.db.transaction(Transaction.IMMEDIATE) as t:
+                self._process_updates(chunk, t)
             return True
         else:
             return False
@@ -321,8 +322,7 @@ class Syncer(P2P):
         with SyncConnection(self._db, self.name, sock, self.uuid) as conn:
             try:
                 logging.debug("Handshaking with remote address %s", peer)
-                with self._db.transaction():
-                    conn.handshake()
+                conn.handshake()
             except StopIteration:
                 logging.debug("Handshake ended prematurely with %s", peer)
                 return
@@ -346,7 +346,7 @@ class Syncer(P2P):
     def _db_push(self, db_poll_interval):
         while self.running:
             sent = 0
-            with self._db.transaction():
+            with self._db.lock, self._db.transaction():
                 for conn in self.connections.values():
                     try:
                         sent += conn.db_push()

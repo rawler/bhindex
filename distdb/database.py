@@ -1,4 +1,4 @@
-import contextlib
+import inspect
 import sqlite3
 from time import time
 
@@ -103,26 +103,133 @@ class Sorting:
         return lambda: ("substr(value, instr(value, ?))", [character])
 
 
+class Transaction(object):
+    DEFERRED = "DEFERRED"
+    IMMEDIATE = "IMMEDIATE"
+    EXCLUSIVE = "EXCLUSIVE"
+    ACTIVE = set([IMMEDIATE, EXCLUSIVE])
+
+    def __init__(self, db, type):
+        self.db = db
+        self.conn = db.conn
+        self.lock = db.lock
+        self.type = type
+        self._begin()
+        self.reserved = type in self.ACTIVE
+        self.created = inspect.getouterframes(inspect.currentframe(), 2)[1:]
+
+    def _begin(self):
+        self.last_yield = time()
+        with self.lock:
+            self.conn.execute('BEGIN %s TRANSACTION' % self.type)
+            self.db.in_transaction = self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, exc, tb):
+        if exc:
+            self.rollback()
+        else:
+            self.commit()
+
+    def rollback(self):
+        assert self.db.in_transaction is self
+        self.conn.rollback()
+        self.db.in_transaction = None
+
+    def commit(self):
+        assert self.db.in_transaction is self
+        with self.lock:
+            self.conn.commit()
+            self.db.in_transaction = None
+
+    def yield_from(self, threshold=0):
+        if self.last_yield + threshold > time():
+            return
+        self.commit()
+        self._begin()
+
+    def take_write(self):
+        with self.lock:
+            self.conn.execute("PRAGMA user_version=0")
+            self.reserved = True
+
+    def _insert_list(self, values):
+        if not values:
+            return None
+        assert self.reserved
+        listid = self.db._get_list_id(values)
+        if listid:
+            return listid
+        newlistid = (
+            self.db._query_single("SELECT MAX(listid) FROM list") or 0) + 1
+        with self.lock:
+            self.conn.cursor().executemany("INSERT INTO list (listid, value) VALUES (?, ?)",
+                                           [(newlistid, value) for value in values])
+        return newlistid
+
+    def update_attr(self, objid, key, values):
+        objid = self.db._get_id('obj', objid)
+        keyid = self.db._getKeyId(key)
+        tstamp = self.db._query_single(
+            "SELECT timestamp FROM map WHERE objid = ? AND keyid = ?", (objid, keyid))
+        if values.t > tstamp:
+            newlistid = self._insert_list(values)
+            with self.lock:
+                cursor = self.conn.cursor()
+                cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
+                            VALUES (?, ?, ?, ?)""",
+                               (objid, keyid, values.t, newlistid))
+            return cursor.lastrowid
+        else:
+            return False
+
+    def update(self, obj):
+        _dict = obj._dict
+        objid = self.db._get_id('obj', obj.id)
+
+        with self.lock:
+            cursor = self.conn.cursor()
+            for key in obj._dirty:
+                values = _dict.get(key, None)
+                if values is None:
+                    values = ValueSet([], t=obj._deleted[key])
+                keyid = self.db._getKeyId(key)
+                old_timestamp = self.db._query_single(
+                    "SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
+                if not old_timestamp or values.t >= old_timestamp:
+                    listid = self._insert_list(values)
+                    cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
+                                        VALUES (?, ?, ?, ?)""",
+                                   (objid, keyid, values.t, listid))
+        obj._dirty.clear()
+        return obj
+
+
 class DB(object):
     ANY = ANY
     Starts = Starts
 
     def __init__(self, path):
         self.conn = sqlite3.connect(
-            path, timeout=60, isolation_level='DEFERRED', check_same_thread=False)
+            path, timeout=60, isolation_level=Transaction.DEFERRED, check_same_thread=False)
         self.cursor = self.conn.cursor()
         create_DB(self.conn)
-        self.__idCache = dict()
+        self.__keyCache = dict()
         self.lock = concurrent.ThreadLock()
+        self.in_transaction = None
 
     def set_volatile(self, v):
         sync = v and 'OFF' or 'NORMAL'
         self.conn.execute("PRAGMA synchronous = %s" % sync)
 
-    @contextlib.contextmanager
-    def transaction(self):
-        with self.lock, self.conn:
-            yield
+    def transaction(self, type=Transaction.IMMEDIATE):
+        if self.in_transaction is not None:
+            assert False, "Previous transaction created at %s" % (self.in_transaction.created[0][1:3],)
+        t = Transaction(self, type)
+        t.created = inspect.getouterframes(inspect.currentframe(), 2)[1:]
+        return t
 
     def _query_all(self, query, args):
         with self.lock:
@@ -154,12 +261,12 @@ class DB(object):
                     "SELECT %sid FROM %s WHERE %s = ?" % (tbl, tbl, tbl), (id,))
         return objid
 
-    def _getCachedId(self, tbl, id):
+    def _getKeyId(self, id):
         try:
-            return self.__idCache[(tbl, id)]
+            return self.__keyCache[id]
         except KeyError:
-            id = self._get_id(tbl, id)
-            self.__idCache[(tbl, id)] = id
+            id = self._get_id('key', id)
+            self.__keyCache[id] = id
             return id
 
     def get(self, obj, fields=None):
@@ -192,51 +299,6 @@ class DB(object):
             self.conn.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
                             SELECT objid, keyid, ?, NULL FROM map WHERE objid = ?""", (t, objid))
 
-    def update_attr(self, objid, key, values):
-        objid = self._get_id('obj', objid)
-        keyid = self._getCachedId('key', key)
-        tstamp = self._query_single(
-            "SELECT timestamp FROM map WHERE objid = ? AND keyid = ?", (objid, keyid))
-        if values.t > tstamp:
-            newlistid = self._insert_list(values)
-            with self.lock:
-                cursor = self.conn.cursor()
-                cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
-                            VALUES (?, ?, ?, ?)""",
-                               (objid, keyid, values.t, newlistid))
-            return cursor.lastrowid
-        else:
-            return False
-
-    def _get_list_id(self, values):
-        _values = set(values)
-        suspects = [x for (x,) in self._query_all(
-            "SELECT listid FROM list WHERE value = ?", (_values.pop(),))]
-        while _values and suspects:
-            query = "SELECT listid FROM list WHERE value = ? AND listid IN (%s)" % (
-                ','.join(['?'] * len(suspects)))
-            suspects = [
-                x for (x,) in self._query_all(query, [_values.pop()] + suspects)]
-        if suspects and (not _values):
-            query = "SELECT listid FROM list WHERE listid IN (%s) GROUP BY listid HAVING COUNT(value) = ?" % (
-                ','.join(['?'] * len(suspects)))
-            listid = self._query_single(query, suspects + [len(values)])
-            if listid:
-                return listid
-
-    def _insert_list(self, values):
-        if not values:
-            return None
-        listid = self._get_list_id(values)
-        if listid:
-            return listid
-        newlistid = (
-            self._query_single("SELECT MAX(listid) FROM list") or 0) + 1
-        with self.lock:
-            self.conn.cursor().executemany("INSERT INTO list (listid, value) VALUES (?, ?)",
-                                           [(newlistid, value) for value in values])
-        return newlistid
-
     def query_ids(self, criteria):
         query, params = _sql_for_query(criteria)
         query = "SELECT obj FROM obj NATURAL JOIN (%s)" % query
@@ -258,30 +320,21 @@ class DB(object):
         for objid, key_value in self._query_all(query, params):
             yield key_value, self.get(objid, fields)
 
-    def update(self, obj):
-        _dict = obj._dict
-        objid = self._get_id('obj', obj.id)
-
-        with self.lock:
-            cursor = self.conn.cursor()
-            for key in obj._dirty:
-                values = _dict.get(key, None)
-                if values is None:
-                    values = ValueSet([], t=obj._deleted[key])
-                keyid = self._getCachedId('key', key)
-                old_timestamp = self._query_single(
-                    "SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
-                if not old_timestamp or values.t >= old_timestamp:
-                    listid = self._insert_list(values)
-                    cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
-                                        VALUES (?, ?, ?, ?)""",
-                                   (objid, keyid, values.t, listid))
-        obj._dirty.clear()
-        return obj
-
-    def commit(self):
-        with self.lock:
-            self.conn.commit()
+    def _get_list_id(self, values):
+        _values = set(values)
+        suspects = [x for (x,) in self._query_all(
+            "SELECT listid FROM list WHERE value = ?", (_values.pop(),))]
+        while _values and suspects:
+            query = "SELECT listid FROM list WHERE value = ? AND listid IN (%s)" % (
+                ','.join(['?'] * len(suspects)))
+            suspects = [
+                x for (x,) in self._query_all(query, [_values.pop()] + suspects)]
+        if suspects and (not _values):
+            query = "SELECT listid FROM list WHERE listid IN (%s) GROUP BY listid HAVING COUNT(value) = ?" % (
+                ','.join(['?'] * len(suspects)))
+            listid = self._query_single(query, suspects + [len(values)])
+            if listid:
+                return listid
 
     def vacuum(self, delete_grace=DEFAULT_GRACE):
         with self.lock:

@@ -96,7 +96,8 @@ class TestSyncConnection():
         self.handshake()
 
         self.assert_equal(self.obj.id)
-        self.db1.update(self.obj)
+        with self.db1.transaction() as t:
+            t.update(self.obj)
         assert_in(u'apa', self.db1[self.obj.id])
         assert_not_in(u'apa', self.db2[self.obj.id])
 
@@ -112,7 +113,8 @@ class TestSyncConnection():
         self.handshake()
 
         self.assert_equal(self.obj.id)
-        self.db1.update(self.obj)
+        with self.db1.transaction() as t:
+            t.update(self.obj)
         assert_in(u'apa', self.db1[self.obj.id])
         assert_not_in(u'apa', self.db2[self.obj.id])
 
@@ -127,14 +129,16 @@ class TestSyncConnection():
         self.handshake()
 
         self.obj[u'deleted'] = ValueSet([u"Something"], t=445)
-        self.db1.update(self.obj)
+        with self.db1.transaction() as t:
+            t.update(self.obj)
         self.syncer1.db_push()
         self.syncer2._step()
 
         self.assert_equal(self.obj.id)
 
         del self.obj[u'deleted']
-        self.db1.update(self.obj)
+        with self.db1.transaction() as t:
+            t.update(self.obj)
         self.syncer1.db_push()
         self.syncer2._step()
 
@@ -143,7 +147,8 @@ class TestSyncConnection():
     def test_object_deletion(self):
         self.handshake()
 
-        self.db1.update(self.obj)
+        with self.db1.transaction() as t:
+            t.update(self.obj)
         self.syncer1.db_push()
         self.syncer2._step()
 
@@ -157,7 +162,8 @@ class TestSyncConnection():
 
     def test_echo_prevention(self):
         self.handshake()
-        self.db1.update(self.obj)
+        with self.db1.transaction() as t:
+            t.update(self.obj)
 
         # Let syncer1 push update to syncer2
         self.syncer1.db_push()
@@ -292,11 +298,11 @@ class TestSyncServer():
 
         self.wait_for_connection(s2)
 
-        with self.db.transaction():
-            self.db.update(Object('apa', init={u"test": ValueSet(u"4", t=5)}))
+        with self.db.transaction() as t:
+            t.update(Object('apa', init={u"test": ValueSet(u"4", t=5)}))
         wait_for(lambda: 'test' in db2['apa'])
-        with db2.transaction():
-            db2.update(Object('apa', init={u"test": ValueSet(u"7")}))
+        with db2.transaction() as t:
+            t.update(Object('apa', init={u"test": ValueSet(u"7")}))
         wait_for(lambda: self.db['apa']['test'] == ValueSet(u"7"))
 
     def test_disconnect(self):
