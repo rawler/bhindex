@@ -38,7 +38,7 @@ class Connection:
 
     def send(self, msg):
         msgbuf = encodeMessage(msg)
-        self._socket.send(msgbuf)
+        self._socket.sendall(msgbuf)
 
     def close(self):
         self._socket.close()
