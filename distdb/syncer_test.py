@@ -154,7 +154,8 @@ class TestSyncConnection():
 
         self.assert_equal(self.obj.id)
 
-        del self.db1[self.obj]
+        with self.db1.transaction() as t:
+            t.delete(self.obj)
         self.syncer1.db_push()
         self.syncer2._step()
 

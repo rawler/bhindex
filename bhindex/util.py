@@ -1,5 +1,6 @@
 from __future__ import absolute_import
 
+from copy import copy
 import codecs
 import logging
 import sys
@@ -197,7 +198,7 @@ def calc_new_availability(status_ok, avail, seconds_since_check):
         return min(avail, 0) - bonus
 
 
-def updateFolderAvailability(db, item, newAvail, t):
+def updateFolderAvailability(transaction, item, newAvail, t):
     tgt = t + newAvail ** AVAILABILITY_EXPONENT
 
     for dir_mapping in item.get(u'directory', []):
@@ -205,7 +206,7 @@ def updateFolderAvailability(db, item, newAvail, t):
         if not len(dir_mapping) == 2:
             continue
         (dir_id, _) = dir_mapping
-        directory = db.get(dir_id)
+        directory = transaction.db.get(dir_id)
 
         if directory.empty():
             continue
@@ -219,8 +220,8 @@ def updateFolderAvailability(db, item, newAvail, t):
                 objAvail = objAvail.t
         if tgt > objAvail:
             directory[u'bh_availability'] = ValueSet(unicode(newAvail), t=t)
-            db.update(directory)
-            updateFolderAvailability(db, directory, newAvail, t)
+            transaction.update(directory)
+            updateFolderAvailability(transaction, directory, newAvail, t)
 
 
 def _checkAsset(bithorde, obj, t):
@@ -266,12 +267,11 @@ def _scan_assets(bithorde, objs, transaction, checker, t):
 
         if obj.dirty():
             if transaction:
-                db = transaction.db
                 new_avail = float(obj.any('bh_availability'))
                 if new_avail > 0:
-                    updateFolderAvailability(transaction.db, obj, new_avail, t)
+                    updateFolderAvailability(transaction, obj, new_avail, t)
 
-                db.update(obj)
+                transaction.update(obj)
                 transaction.yield_from(2)
         else:
             cacheUse.inc()
@@ -352,3 +352,19 @@ class RepeatingTimer(object):
 
     def cancel(self):
         self.running = None
+
+
+def NoOpContextManager(ctx_mgr):
+    if ctx_mgr is None:
+        return None
+    res = copy(ctx_mgr)
+
+    print "Cloning"
+
+    res.__enter__ = lambda _: res
+
+    def __exit__(_t, _v, _tb):
+        print "Was here"
+    res.__exit__ = __exit__
+
+    return res

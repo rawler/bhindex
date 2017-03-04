@@ -35,16 +35,17 @@ class TestFilesystem(object):
     def setup(self):
         xt = u'tree:tiger:ASDASDSADASDASDSADASDASDSADASDASDSADASD'
         db = self.db = DB(':memory:')
-        self.d = db.update(Object(u"dir:some/dir", {
-            u'directory': ValueSet(u"dir:/apa", 0),
-        }))
-        self.d2 = db.update(Object(u"dir:redundant", {
-            u'directory': ValueSet(u"dir:/apa", 0),
-        }))
-        self.f = db.update(Object('some_file', {
-            u'directory': ValueSet(u"dir:some/dir/file.ext", 0),
-            u'xt': ValueSet(xt),
-        }))
+        with db.transaction() as t:
+            self.d = t.update(Object(u"dir:some/dir", {
+                u'directory': ValueSet(u"dir:/apa", 0),
+            }))
+            self.d2 = t.update(Object(u"dir:redundant", {
+                u'directory': ValueSet(u"dir:/apa", 0),
+            }))
+            self.f = t.update(Object('some_file', {
+                u'directory': ValueSet(u"dir:some/dir/file.ext", 0),
+                u'xt': ValueSet(xt),
+            }))
         self.fs = Filesystem(db)
 
     def test_paths_for(self):
@@ -53,20 +54,20 @@ class TestFilesystem(object):
         assert_set_equal(self.fs.paths_for(self.f), fz((u"apa", u"file.ext")))
 
     def test_broken_direntry(self):
-        broken = [
-            self.db.update(Object(u"dir:broken_dir", {
-                u'directory': ValueSet(u"broken_shit1", 0),
-            })),
-            self.db.update(Object(u"dir:broken_dir", {
-                u'directory': ValueSet(u"broken_shit2/", 0),
-            })),
-            self.db.update(Object(u"dir:broken_dir", {
-                u'directory': ValueSet(u"/broken_shit4", 0),
-            })),
-        ]
+        with self.fs.transaction() as t:
+            broken = [
+                t.update(Object(u"dir:broken_dir", {
+                    u'directory': ValueSet(u"broken_shit1", 0),
+                })),
+                t.update(Object(u"dir:broken_dir", {
+                    u'directory': ValueSet(u"broken_shit2/", 0),
+                })),
+                t.update(Object(u"dir:broken_dir", {
+                    u'directory': ValueSet(u"/broken_shit4", 0),
+                })),
+            ]
 
         for o in broken:
-            print o
             with catch_warnings(True) as w:
                 assert_equal(self.fs.paths_for(o), set())
                 assert_equal(len(w), 1)
@@ -94,7 +95,8 @@ class TestFilesystem(object):
 
     def test_mv(self):
         def assert_same_file(path, ref_file):
-            assert_equals(self.fs.lookup(path).ids(), self.f['xt'])
+            f = self.fs.lookup(path)
+            assert_equals(f.ids(), self.f['xt'])
         assert_same_file(P("apa/file.ext"), self.f)
         self.fs.mv(P("apa"), P("banan"), t=1)
         with assert_raises(NotFoundError):
@@ -106,9 +108,10 @@ class TestFilesystem(object):
         assert_same_file(P("apa/file.ext"), self.f)
 
     def test_colliding_file(self):
-        f2 = self.db.update(Object('some_file_colliding_dir', {
-            u'directory': ValueSet(u"dir:some/dir/file.ext", 0),
-        }))
+        with self.fs.transaction() as t:
+            f2 = t.update(Object('some_file_colliding_dir', {
+                u'directory': ValueSet(u"dir:some/dir/file.ext", 0),
+            }))
 
         assert_set_equal(name_type_ids_set(self.fs.lookup(P('apa'))), fz(
             ('file.ext', Split, fz(u'some_file', f2.id)),

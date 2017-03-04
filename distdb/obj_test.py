@@ -81,7 +81,7 @@ def test_Object_accessor():
     assert_true(o.matches({u'apa': u'citron'}))
 
 def test_Object_mutation():
-    apa = ValueSet([u'banan', u'citron'])
+    apa = ValueSet([u'banan', u'citron'], t=1)
     o = Object('aia')
 
     assert_not_in('apa', o)
@@ -92,8 +92,8 @@ def test_Object_mutation():
     del o[u'apa']
     assert_not_in(u'apa', o)
 
-    o.update_key(u'apa', u'banan')
+    o['apa'] = ValueSet(u'banan', 2)
     assert_equals(o[u'apa'], ValueSet(u'banan'))
 
-    o.update_key(u'apa', u'citron')
-    assert_equals(o[u'apa'], ValueSet([u'banan', u'citron']))
+    o['apa'] = ValueSet(u'citron', 3)
+    assert_equals(o[u'apa'], ValueSet([u'citron']))

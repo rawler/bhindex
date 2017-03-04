@@ -114,40 +114,55 @@ class Transaction(object):
         self.conn = db.conn
         self.lock = db.lock
         self.type = type
-        self._begin()
         self.reserved = type in self.ACTIVE
         self.created = inspect.getouterframes(inspect.currentframe(), 2)[1:]
+        self.count = 0
 
     def _begin(self):
         self.last_yield = time()
         with self.lock:
-            self.conn.execute('BEGIN %s TRANSACTION' % self.type)
-            self.db.in_transaction = self
+            if self.count > 1:
+                self.conn.execute('SAVEPOINT s%d' % self.count)
+            else:
+                self.conn.execute('BEGIN %s TRANSACTION' % self.type)
+                self.db.in_transaction = self
 
     def __enter__(self):
+        self.count += 1
+        self._begin()
         return self
 
     def __exit__(self, type, exc, tb):
+        assert self.count
         if exc:
-            self.rollback()
+            self._rollback()
         else:
-            self.commit()
+            self._commit()
+        self.count -= 1
 
-    def rollback(self):
-        assert self.db.in_transaction is self
-        self.conn.rollback()
-        self.db.in_transaction = None
-
-    def commit(self):
+    def _rollback(self):
         assert self.db.in_transaction is self
         with self.lock:
-            self.conn.commit()
-            self.db.in_transaction = None
+            if self.count > 1:
+                self.conn.execute('ROLLBACK TO SAVEPOINT s%d' % self.count)
+            else:
+                self.conn.rollback()
+                self.db.in_transaction = None
+
+    def _commit(self):
+        assert self.db.in_transaction is self
+        with self.lock:
+            if self.count > 1:
+                self.conn.execute('RELEASE SAVEPOINT s%d' % self.count)
+            else:
+                self.conn.commit()
+                self.db.in_transaction = None
 
     def yield_from(self, threshold=0):
+        assert self.count == 1
         if self.last_yield + threshold > time():
             return
-        self.commit()
+        self._commit()
         self._begin()
 
     def take_write(self):
@@ -192,9 +207,7 @@ class Transaction(object):
         with self.lock:
             cursor = self.conn.cursor()
             for key in obj._dirty:
-                values = _dict.get(key, None)
-                if values is None:
-                    values = ValueSet([], t=obj._deleted[key])
+                values = _dict[key]
                 keyid = self.db._getKeyId(key)
                 old_timestamp = self.db._query_single(
                     "SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
@@ -206,6 +219,13 @@ class Transaction(object):
         obj._dirty.clear()
         return obj
 
+    def delete(self, obj, t=None):
+        object_id = getattr(obj, 'id', obj)
+        objid = self.db._get_id('obj', object_id)
+        t = t or time()
+        with self.lock:
+            self.conn.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
+                            SELECT objid, keyid, ?, NULL FROM map WHERE objid = ?""", (t, objid))
 
 class DB(object):
     ANY = ANY
@@ -213,7 +233,7 @@ class DB(object):
 
     def __init__(self, path):
         self.conn = sqlite3.connect(
-            path, timeout=60, isolation_level=Transaction.DEFERRED, check_same_thread=False)
+            path, timeout=60, isolation_level=None, check_same_thread=False)
         self.cursor = self.conn.cursor()
         create_DB(self.conn)
         self.__keyCache = dict()
@@ -225,11 +245,12 @@ class DB(object):
         self.conn.execute("PRAGMA synchronous = %s" % sync)
 
     def transaction(self, type=Transaction.IMMEDIATE):
-        if self.in_transaction is not None:
-            assert False, "Previous transaction created at %s" % (self.in_transaction.created[0][1:3],)
-        t = Transaction(self, type)
-        t.created = inspect.getouterframes(inspect.currentframe(), 2)[1:]
-        return t
+        if self.in_transaction:
+            return self.in_transaction
+        else:
+            t = Transaction(self, type)
+            t.created = inspect.getouterframes(inspect.currentframe(), 2)[1:]
+            return t
 
     def _query_all(self, query, args):
         with self.lock:
@@ -290,14 +311,6 @@ class DB(object):
 
     def __getitem__(self, obj):
         return self.get(obj)
-
-    def __delitem__(self, obj):
-        object_id = getattr(obj, 'id', obj)
-        objid = self._get_id('obj', object_id)
-        t = time()
-        with self.lock:
-            self.conn.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
-                            SELECT objid, keyid, ?, NULL FROM map WHERE objid = ?""", (t, objid))
 
     def query_ids(self, criteria):
         query, params = _sql_for_query(criteria)

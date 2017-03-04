@@ -119,8 +119,8 @@ class DBExporter(object):
                     size += int(fsize)
 
                 obj[u'@linked'] = ValueSet((u'true',), t=t)
-                with self.db.transaction():
-                    self.db.update(obj)
+                with self.db.transaction() as tr:
+                    tr.update(obj)
         return count, size
 
 

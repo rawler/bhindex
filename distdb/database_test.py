@@ -136,13 +136,15 @@ class TestInRam():
     def test_del_obj(self):
         db, o = self.db, self.o
 
-        del db[o]
+        with self.db.transaction() as t:
+            t.delete(o)
         assert_equal(db[o.id], Object(o.id))
         assert_equal(list(db.query({"key": ANY})), [])
 
     def test_vacuum(self):
         db, o = self.db, self.o
-        del db[o]
+        with self.db.transaction() as t:
+            t.delete(o)
         assert_is_not_none(db._get_list_id(o[u'key']))
         assert_is_not_none(db._get_id('key', u'key'))
         assert_is_not_none(db._get_id('obj', o.id))
@@ -162,7 +164,8 @@ class TestInRam():
         item_serial = item[3]
         assert_equal(self.db.last_serial(), item_serial)
         assert_false(list(self.db.get_public_mappings_after(item_serial)))
-        del self.db[self.o]
+        with self.db.transaction() as t:
+            t.delete(self.o)
         items = self.db.get_public_mappings_after(item_serial)
         del_item = next((x for x in items if x[0] == u'some_id'), None)
         assert_equal(del_item[0], item[0])

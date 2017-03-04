@@ -63,13 +63,14 @@ def test_DBExporter():
     path = u'apa/movie'
     xt = u'tree:tiger:ASDASDSADASDASDSADASDASDSADASDASDSADASD'
     db = DB(':memory:')
-    db.update(Object(u"dir:apa", {
-        u'directory': ValueSet(u"dir:/apa"),
-    }))
-    db.update(Object('some_file', {
-        u'directory': ValueSet(u"dir:apa/movie"),
-        u'xt': ValueSet(xt),
-    }))
+    with db.transaction() as t:
+        t.update(Object(u"dir:apa", {
+            u'directory': ValueSet(u"dir:/apa"),
+        }))
+        t.update(Object('some_file', {
+            u'directory': ValueSet(u"dir:apa/movie"),
+            u'xt': ValueSet(xt),
+        }))
 
     asset = Mock()
     asset.__enter__ = Mock(return_value=asset)

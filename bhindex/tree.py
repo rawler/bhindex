@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from logging import getLogger
 from os.path import normpath as osnormpath
 from time import time
@@ -5,10 +6,15 @@ from warnings import warn
 
 from distdb import Object, Starts, ValueSet, Sorting
 from .bithorde import Identifiers
+from .util import NoOpContextManager
 log = getLogger('tree')
 
 
 class NotFoundError(LookupError):
+    pass
+
+
+class FoundError(LookupError):
     pass
 
 
@@ -99,29 +105,33 @@ class Directory(Node):
         else:
             raise NotFoundError("%s not found in %s" % (key, [x.id for x in self.objs]))
 
-    def mkdir(self, name, t=None):
+    def mkdir(self, name, t=None, tr=None):
         try:
             return self[name]
         except:
             directory_attr = u'%s/%s' % (self.objs[0].id, name)
             new = Object.new('dir')
-            new[u'directory'] = ValueSet((directory_attr,), t=t)
-            self.db.update(new)
+            new['directory'] = ValueSet((directory_attr,), t=t)
+            with tr or Filesystem.db_transaction(self.db) as tr:
+                tr.update(new)
             return Directory(self, (new,))
 
-    def link(self, name, node, t=None):
+    def link(self, name, node, t=None, tr=None):
         directory_attr = u'%s/%s' % (self.objs[0].id, name)
         for obj in node.objs:
             try:
                 dir = obj[u'directory']
             except KeyError:
-                obj[u'directory'] = ValueSet((directory_attr,), t=t)
+                obj['directory'] = ValueSet((directory_attr,), t=t)
             else:
                 dir.add(directory_attr, t=t)
-                obj[u'directory'] = dir
-            self.db.update(obj)
+                obj['directory'] = dir
+            with tr or Filesystem.db_transaction(self.db) as tr:
+                print "COWABUNGA"
+                tr.update(obj)
+                print "EHH, Pizza"
 
-    def rm(self, name, t=None):
+    def rm(self, name, t=None, tr=None):
         try:
             n = self[name]
         except NotFoundError:
@@ -129,10 +139,11 @@ class Directory(Node):
 
         purge_list = set(u'%s/%s' % (obj.id, name) for obj in self.objs)
 
-        for obj in getattr(n, 'objs', None) or [n.obj]:
-            dirs = ValueSet(obj[u'directory'] - purge_list, t=t)
-            obj[u'directory'] = dirs
-            self.db.update(obj)
+        with tr or Filesystem.db_transaction(self.db) as tr:
+            for obj in getattr(n, 'objs', None) or [n.obj]:
+                dirs = ValueSet(obj[u'directory'] - purge_list, t=t)
+                obj[u'directory'] = dirs
+                tr.update(obj)
 
     def add_file(self, name, ids, size, t=None):
         ids = Identifiers(ids)
@@ -167,14 +178,15 @@ class Split(Directory):
             if name == key:
                 return self._map((obj,), key)
 
-    def rm(self, name, t=None):
+    def rm(self, name, t=None, tr=None):
         purge_list = set("%s/%s" % (obj.id, self._conflictname) for obj in self._dir.objs)
-        for obj in self.objs:
-            ename = self._entry(obj.id)
-            if ename == name:
-                dir = ValueSet(obj['directory'] - purge_list, t=t)
-                obj['directory'] = dir
-                self.db.update(obj)
+        with tr or Filesystem.db_transaction(self.db) as tr:
+            for obj in self.objs:
+                ename = self._entry(obj.id)
+                if ename == name:
+                    dir = ValueSet(obj['directory'] - purge_list, t=t)
+                    obj['directory'] = dir
+                    tr.update(obj)
 
 
 class Path(tuple):
@@ -191,6 +203,7 @@ class Path(tuple):
         return u"/".join(self)
 
 
+# TODO: rewrite so changes can only be done in a transaction
 class Filesystem(object):
     def __init__(self, db):
         self.db = db
@@ -213,7 +226,11 @@ class Filesystem(object):
         return Directory(self, [self.db['dir:']])
 
     def transaction(self):
-        return self.db.transaction()
+        return self.db_transaction(self.db)
+
+    @staticmethod
+    def db_transaction(db):
+        return db.in_transaction or db.transaction()
 
     def lookup(self, path):
         res = self.root()
@@ -228,21 +245,28 @@ class Filesystem(object):
 
         return res
 
-    def mkdir(self, directory, t=None):
+    def mkdir(self, directory, t=None, tr=None):
         if t is None:
             t = time()
-        dir = self.root()
-        for segment in directory:
-            dir = dir.mkdir(segment, t)
+        with tr or self.transaction() as tr:
+            dir = self.root()
+            for segment in directory:
+                dir = dir.mkdir(segment, t=t, tr=tr)
         return dir
 
-    def mv(self, src, dst, t=None):
+    def mv(self, src, dst, t=None, tr=None):
+        try:
+            self.lookup(dst)
+            raise FoundError("%s already exist")
+        except NotFoundError:
+            pass
         src_dir = self.lookup(src[:-1])
         target = src_dir[src[-1]]
 
-        dst_dir = self.mkdir(dst[:-1], t=t)
-        dst_dir.link(dst[-1], target, t=t)
-        src_dir.rm(src[-1], t=t)
+        with tr or self.transaction() as tr:
+            dst_dir = self.mkdir(dst[:-1], t=t, tr=tr)
+            dst_dir.link(dst[-1], target, t=t, tr=tr)
+            src_dir.rm(src[-1], t=t, tr=tr)
 
 
 def prepare_ls_args(parser, config):
@@ -276,6 +300,5 @@ def mv_main(args, config, db):
     src = Path(args.source)
     dst = Path(args.destination)
 
-    with db.transaction():
-        tree = Filesystem(db)
-        tree.mv(src, dst, t)
+    tree = Filesystem(db)
+    tree.mv(src, dst, t)

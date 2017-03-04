@@ -51,7 +51,6 @@ class Object(object):
         self.id = objid
         self._dirty = set()
         self._dict = dict()
-        self._deleted = dict()
         self.update(init)
 
     @classmethod
@@ -83,24 +82,24 @@ class Object(object):
 
     def __eq__(self, other):
         return self.id == other.id \
-           and self._dict == other._dict
+            and self._dict == other._dict
 
     def __contains__(self, key):
-        return key in self._dict
+        return bool(self._dict.get(key, None))
 
     def __setitem__(self, key, value):
         assert isinstance(value, ValueSet)
 
         key = key.lower()
-        if key not in self._dict or (value.t >= self._dict[key].t):
-            self._dirty.add(key)
+        current = self._dict.get(key, None)
+        if current is None or (value.t >= current.t):
             self._dict[key] = value
+            self._dirty.add(key)
 
     def __delitem__(self, key):
-        if key in self._dict:
+        if key in self:
+            self._dict[key] = ValueSet((), self._dict[key].t + 1)
             self._dirty.add(key)
-            self._deleted[key] = time()
-            del self._dict[key]
 
     def iteritems(self):
         return self._dict.iteritems()
@@ -118,16 +117,6 @@ class Object(object):
             if value not in (None, ANY) and value not in self._dict[key]:
                 return False
         return True
-
-    def update_key(self, key, values, t=None):
-        if isinstance(values, unicode):
-            values = set([values])
-
-        if key in self:
-            self[key].update(values, t)
-            self._dirty.add(key)
-        else:
-            self[key] = ValueSet(values, t)
 
     def timestamp(self, default=None):
         timestamps = [x.t for x in self._dict.itervalues()]

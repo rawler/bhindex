@@ -31,5 +31,5 @@ def main(args, config, db):
     if args.wipe:
         wipe(config, db, args.wipe)
 
-    db.vacuum()
-    db.commit()
+    with db.transaction():
+        db.vacuum()
