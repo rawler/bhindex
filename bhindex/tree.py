@@ -5,6 +5,7 @@ from warnings import warn
 
 from distdb import Object, Starts, Sorting
 from .bithorde import Identifiers
+from .util import hasValidStatus
 log = getLogger('tree')
 
 
@@ -49,17 +50,25 @@ def split_directory_entry(dirent):
     return dir, name
 
 
-def itermerged(gen, collection=set):
-    gen = iter(gen)
-    (key, values) = gen.next()
+def itermerged(src, collection=set):
+    '''Given a sorted iterator of (key, value)-items,
+    emits (key, [values]) for duplicate keys'''
+    src = iter(src)
+    (key, values) = src.next()
     values = [values]
-    for k, v in gen:
+    for k, v in src:
         if k == key:
             values.append(v)
         else:
             yield key, collection(values)
             key, values = k, [v]
     yield key, collection(values)
+
+
+def _filterAvailable(src, t):
+    for dirent, child in src:
+        if hasValidStatus(child, t):
+            yield dirent, child
 
 
 class Directory(Node):
@@ -72,17 +81,17 @@ class Directory(Node):
         else:
             return Directory(self, objs)
 
-    def ls(self):
-        for name, children in itermerged(self._ls()):
+    def ls(self, t=None):
+        for name, children in itermerged(self._ls(t or time())):
             yield name, self._map(children, name)
 
-    def _ls(self):
+    def _ls(self, t):
         dirids = set("%s" % dirobj.id for dirobj in self.objs)
         children = self.db.query_keyed(
             {'directory': Starts("%s/" % d for d in dirids)}, key="+directory",
-            sortmeth=Sorting.split('/'), fields=('directory', 'xt'),
+            sortmeth=Sorting.split('/'), fields=('directory', 'xt', 'bh_availability'),
         )
-        for dirent, child in children:
+        for dirent, child in _filterAvailable(children, t):
             try:
                 dir, name = split_directory_entry(dirent)
             except ValueError:
@@ -161,8 +170,8 @@ class Split(Directory):
     def _entry(self, id):
         return "%s%s" % (id.replace("/", "_"), self._ext)
 
-    def ls(self, offset=0):
-        for obj in self.objs[offset:]:
+    def ls(self, t=0):
+        for obj in self.objs:
             name = self._entry(obj.id)
             yield name, self._map((obj,), name)
 

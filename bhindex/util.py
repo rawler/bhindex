@@ -131,18 +131,18 @@ def utf8(s):
         return s
 
 
-def hasValidStatus(obj, t=time()):
+def hasValidStatus(obj, t=None):
     '''Returns True, False or None, respectively'''
-    validity = validAvailability(obj, t)
+    validity = validAvailability(obj, t or time())
     if validity is None:
         return None
     else:
         return validity > 0
 
 
-def validAvailability(obj, t=time()):
+def validAvailability(obj, t=None):
     '''Returns the number of seconds the object is believed to have been available/unavailable, or None for outdated cache'''
-    availability, time_since_check = _object_availability(obj, t)
+    availability, time_since_check = _object_availability(obj, t or time())
 
     valid_for = (abs(availability or 0) ** AVAILABILITY_EXPONENT) - (time_since_check or 0)
 
