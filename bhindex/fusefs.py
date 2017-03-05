@@ -75,6 +75,7 @@ class IDResource(object):
 
 
 class INode(object):
+    __slots__ = ('ino')
     MODE_0755 = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
     MODE_0555 = stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
 
@@ -125,6 +126,8 @@ class INode(object):
 
 
 class File(INode):
+    __slots__ = ('f')
+
     def __init__(self, f):
         INode.__init__(self)
         self.f = f
@@ -140,6 +143,8 @@ class File(INode):
 
 
 class Directory(INode):
+    __slots__ = ('d', 'readers')
+
     def __init__(self, d):
         INode.__init__(self)
         self.d = d
