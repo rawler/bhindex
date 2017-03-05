@@ -4,7 +4,8 @@ from nose.tools import *
 from warnings import catch_warnings
 
 from .tree import *
-from distdb import DB, Object, ValueSet
+from distdb import DB, Object
+from distdb.obj import TimedValues
 
 P = Path
 
@@ -37,14 +38,14 @@ class TestFilesystem(object):
         db = self.db = DB(':memory:')
         with db.transaction() as t:
             self.d = t.update(Object(u"dir:some/dir", {
-                u'directory': ValueSet(u"dir:/apa", 0),
+                u'directory': TimedValues(u"dir:/apa", 0),
             }))
             self.d2 = t.update(Object(u"dir:redundant", {
-                u'directory': ValueSet(u"dir:/apa", 0),
+                u'directory': TimedValues(u"dir:/apa", 0),
             }))
             self.f = t.update(Object('some_file', {
-                u'directory': ValueSet(u"dir:some/dir/file.ext", 0),
-                u'xt': ValueSet(xt),
+                u'directory': TimedValues(u"dir:some/dir/file.ext", 0),
+                u'xt': TimedValues(xt),
             }))
         self.fs = Filesystem(db)
 
@@ -57,13 +58,13 @@ class TestFilesystem(object):
         with self.fs.transaction() as t:
             broken = [
                 t.update(Object(u"dir:broken_dir", {
-                    u'directory': ValueSet(u"broken_shit1", 0),
+                    u'directory': TimedValues(u"broken_shit1", 0),
                 })),
                 t.update(Object(u"dir:broken_dir", {
-                    u'directory': ValueSet(u"broken_shit2/", 0),
+                    u'directory': TimedValues(u"broken_shit2/", 0),
                 })),
                 t.update(Object(u"dir:broken_dir", {
-                    u'directory': ValueSet(u"/broken_shit4", 0),
+                    u'directory': TimedValues(u"/broken_shit4", 0),
                 })),
             ]
 
@@ -110,7 +111,7 @@ class TestFilesystem(object):
     def test_colliding_file(self):
         with self.fs.transaction() as t:
             f2 = t.update(Object('some_file_colliding_dir', {
-                u'directory': ValueSet(u"dir:some/dir/file.ext", 0),
+                u'directory': TimedValues(u"dir:some/dir/file.ext", 0),
             }))
 
         assert_set_equal(name_type_ids_set(self.fs.lookup(P('apa'))), fz(

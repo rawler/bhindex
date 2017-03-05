@@ -5,7 +5,7 @@ import os
 import os.path as path
 from time import time
 
-from distdb import ANY, ValueSet
+from distdb import ANY
 from bithorde import Client, parseConfig
 
 from .tree import Filesystem
@@ -118,7 +118,7 @@ class DBExporter(object):
                     count += 1
                     size += int(fsize)
 
-                obj[u'@linked'] = ValueSet((u'true',), t=t)
+                obj.set('@linked', u'true', t=t)
                 with self.db.transaction() as tr:
                     tr.update(obj)
         return count, size

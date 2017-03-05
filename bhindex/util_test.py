@@ -3,7 +3,8 @@ from mock import MagicMock
 from nose.tools import *
 
 import concurrent
-from distdb import Object, ValueSet
+from distdb import Object
+from distdb.obj import TimedValues
 from .util import *
 from .util import _object_availability, _checkAsset
 
@@ -13,19 +14,19 @@ def test__object_availability():
     }), 1500), (0, 0))
 
     assert_equal(_object_availability(Object('qwe123', {
-        'bh_status': ValueSet((u'False',), 1000),
-        'bh_status_confirmed': ValueSet((), 1500),
+        'bh_status': TimedValues((u'False',), 1000),
+        'bh_status_confirmed': TimedValues((), 1500),
     }), 2000), (-500, 500))
 
     assert_equal(_object_availability(Object('qwe123', {
-        'bh_status': ValueSet((u'True',), 1000),
-        'bh_status_confirmed': ValueSet((), 1500),
+        'bh_status': TimedValues((u'True',), 1000),
+        'bh_status_confirmed': TimedValues((), 1500),
     }), 2000), (500, 500))
 
     assert_equal(_object_availability(Object('qwe123', {
-        'bh_availability': ValueSet(u'384', 1000),
-        'bh_status': ValueSet((u'True',), 1000),
-        'bh_status_confirmed': ValueSet((), 1500),
+        'bh_availability': TimedValues(u'384', 1000),
+        'bh_status': TimedValues((u'True',), 1000),
+        'bh_status_confirmed': TimedValues((), 1500),
     }), 2000), (384, 1000))
 
 
@@ -34,24 +35,24 @@ def test_hasValidStatus():
     }), 1500), None)
 
     assert_equal(hasValidStatus(Object('qwe123', {
-        'bh_status': ValueSet((u'True',), 1000),
-        'bh_status_confirmed': ValueSet((), 1500),
+        'bh_status': TimedValues((u'True',), 1000),
+        'bh_status_confirmed': TimedValues((), 1500),
     }), 2000), None)
 
     assert_equal(hasValidStatus(Object('qwe123', {
-        'bh_status': ValueSet((u'False',), 1000),
-        'bh_status_confirmed': ValueSet((), 2980),
+        'bh_status': TimedValues((u'False',), 1000),
+        'bh_status_confirmed': TimedValues((), 2980),
     }), 2000), False)
 
     assert_equal(hasValidStatus(Object('qwe123', {
-        'bh_status': ValueSet((u'True',), 1000),
-        'bh_status_confirmed': ValueSet((), 2980),
+        'bh_status': TimedValues((u'True',), 1000),
+        'bh_status_confirmed': TimedValues((), 2980),
     }), 2000), True)
 
     assert_equal(hasValidStatus(Object('qwe123', {
-        'bh_availability': ValueSet(u'10000', 1500),
-        'bh_status': ValueSet((u'True',), 1000),
-        'bh_status_confirmed': ValueSet((), 1500),
+        'bh_availability': TimedValues(u'10000', 1500),
+        'bh_status': TimedValues((u'True',), 1000),
+        'bh_status_confirmed': TimedValues((), 1500),
     }), 2000), True)
 
 
@@ -78,12 +79,12 @@ class MockBithorde(object):
 def test__checkAsset():
     t = 2000
     asset = Object('qwe123', {
-        'xt': ValueSet(u'tree:tiger:5CN2KZAUNFUPOVI3DP4KLHTZ2POBOYMCULZCE5A', 1000),
-        'bh_status': ValueSet((u'False',), 1000),
-        'bh_status_confirmed': ValueSet((), 1500),
+        'xt': TimedValues(u'tree:tiger:5CN2KZAUNFUPOVI3DP4KLHTZ2POBOYMCULZCE5A', 1000),
+        'bh_status': TimedValues((u'False',), 1000),
+        'bh_status_confirmed': TimedValues((), 1500),
     })
     _checkAsset(MockBithorde(message.SUCCESS), asset, t)
-    assert_equal(asset['bh_availability'], ValueSet((unicode(500 * AVAILABILITY_BONUS),), 2000))
+    assert_equal(asset['bh_availability'], TimedValues((unicode(500 * AVAILABILITY_BONUS),), 2000))
     assert_not_in('bh_status', asset)
     assert_not_in('bh_status_confirmed', asset)
 

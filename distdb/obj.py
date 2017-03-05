@@ -1,48 +1,54 @@
 from base64 import urlsafe_b64encode as b64encode
-from time import time
+from time import time as _sys_time
 from uuid import uuid4
 
 ANY = object()
 
 
-class ValueSet(set):
-    # TODO: Rethink API surrounding ValueSet. Should it really be a set, not a frozenset? Should time really be mapped here?
+def _time(t):
+    if t is None:
+        return _sys_time()
+    else:
+        return t
 
-    def __init__(self, v, t=None):
-        if isinstance(v, unicode):
-            set.__init__(self, [v])
-        else:
-            set.__init__(self, v)
-            for x in self:
-                assert isinstance(x, unicode)
-        if t is None:
-            t = time()
-        self.t = t
 
-    def _touch(self, t):
-        if t is None:
-            t = time()
-        self.t = max((t, self.t))
-
-    def add(self, value, t=None):
-        self._touch(t)
-        super(ValueSet, self).add(value)
-
-    def discard(self, value, t=None):
-        self._touch(t)
-        super(ValueSet, self).discard(value)
-
-    def update(self, v, t=None):
-        self._touch(t)
-        super(ValueSet, self).update(self, v)
-
+class Set(frozenset):
     def any(self, default=None):
         for x in self:
             return x
         return default
 
+
+class TimedValues:
+    __slots__ = ("v", "t")
+
+    def __init__(self, v, t=None):
+        if isinstance(v, unicode):
+            self.v = Set([v])
+        else:
+            self.v = Set(v)
+            for x in self.v:
+                assert isinstance(x, unicode)
+        self.t = _time(t)
+
+    def __nonzero__(self):
+        return bool(self.v)
+
+    def __eq__(self, other):
+        if isinstance(other, TimedValues):
+            return self.v == other.v
+        else:
+            return self.v == other
+
+    def any(self, default=None):
+        return self.v.any(default)
+
     def join(self, sep=u', '):
-        return unicode(sep).join(self)
+        return unicode(sep).join(self.v)
+
+    def __repr__(self):
+        return repr(self.v)
+
     __unicode__ = __str__ = join
 
 
@@ -60,25 +66,8 @@ class Object(object):
             id = '%s:%s' % (prefix, id)
         return cls(id)
 
-    def dirty(self):
-        return self._dirty
-
-    def update(self, other):
-        for k, v in other.iteritems():
-            self[k] = v
-
     def __getitem__(self, key):
-        return self._dict[key]
-
-    def get(self, key, default=None):
-        return self._dict.get(key, default)
-
-    def any(self, key, default=None):
-        values = self._dict.get(key)
-        if values:
-            return values.any(default)
-        else:
-            return default
+        return self._dict[key].v
 
     def __eq__(self, other):
         return self.id == other.id \
@@ -87,22 +76,30 @@ class Object(object):
     def __contains__(self, key):
         return bool(self._dict.get(key, None))
 
-    def __setitem__(self, key, value):
-        assert isinstance(value, ValueSet)
+    def item(self, key):
+        return self._dict[key]
 
-        key = key.lower()
-        current = self._dict.get(key, None)
-        if current is None or (value.t >= current.t):
-            self._dict[key] = value
-            self._dirty.add(key)
+    def get(self, key, default=None):
+        try:
+            return self._dict[key].v
+        except (KeyError, AttributeError):
+            return default
 
-    def __delitem__(self, key):
-        if key in self:
-            self._dict[key] = ValueSet((), self._dict[key].t + 1)
-            self._dirty.add(key)
+    def getitem(self, key, default=None):
+        try:
+            return self._dict[key]
+        except (KeyError, AttributeError):
+            return default
+
+    def any(self, key, default=None):
+        values = self._dict.get(key)
+        if values:
+            return values.any(default)
+        else:
+            return default
 
     def iteritems(self):
-        return self._dict.iteritems()
+        return ((k, v.v) for k, v in self._dict.iteritems())
 
     def keys(self):
         return self._dict.keys()
@@ -114,19 +111,44 @@ class Object(object):
         for key, value in criteria.iteritems():
             if key not in self._dict:
                 return False
-            if value not in (None, ANY) and value not in self._dict[key]:
+            if value not in (None, ANY) and value not in self._dict[key].v:
                 return False
         return True
 
     def timestamp(self, default=None):
-        timestamps = [x.t for x in self._dict.itervalues()]
-        if timestamps:
-            return max(timestamps)
-        else:
+        try:
+            return max(x.t for x in self._dict.itervalues())
+        except ValueError:
             return default
+
+    def dirty(self):
+        return self._dirty
+
+    def set(self, key, values, t=None):
+        self[key] = TimedValues(values, t)
+
+    def __setitem__(self, key, value):
+        key = key.lower()
+
+        if not isinstance(value, TimedValues):
+            value = TimedValues(value, _sys_time())
+
+        current = self._dict.get(key, None)
+        if (not current) or (value.t >= current.t) and (value.v != current.v):
+            self._dict[key] = value
+            self._dirty.add(key)
+
+    def __delitem__(self, key):
+        if key in self:
+            self._dict[key] = TimedValues((), self._dict[key].t + 1)
+            self._dirty.add(key)
+
+    def update(self, other):
+        for k, v in other.iteritems():
+            self[k] = v
 
     def __repr__(self):
         return repr(self._dict)
 
     def __unicode__(self):
-        return u"db.Object {\n%s\n}" % u'\n'.join(u" %s: %s" % x for x in self.iteritems())
+        return u"db.Object {\n%s\n}" % u'\n'.join(u" %s: %s" % x for x in self._dict.iteritems())

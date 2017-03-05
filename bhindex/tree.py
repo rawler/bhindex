@@ -1,12 +1,10 @@
-from contextlib import contextmanager
 from logging import getLogger
 from os.path import normpath as osnormpath
 from time import time
 from warnings import warn
 
-from distdb import Object, Starts, ValueSet, Sorting
+from distdb import Object, Starts, Sorting
 from .bithorde import Identifiers
-from .util import NoOpContextManager
 log = getLogger('tree')
 
 
@@ -111,7 +109,7 @@ class Directory(Node):
         except:
             directory_attr = u'%s/%s' % (self.objs[0].id, name)
             new = Object.new('dir')
-            new['directory'] = ValueSet((directory_attr,), t=t)
+            new.set('directory', directory_attr, t=t)
             with tr or Filesystem.db_transaction(self.db) as tr:
                 tr.update(new)
             return Directory(self, (new,))
@@ -122,14 +120,11 @@ class Directory(Node):
             try:
                 dir = obj[u'directory']
             except KeyError:
-                obj['directory'] = ValueSet((directory_attr,), t=t)
+                obj.set('directory', directory_attr, t=t)
             else:
-                dir.add(directory_attr, t=t)
-                obj['directory'] = dir
+                obj.set('directory', dir | {directory_attr}, t=t)
             with tr or Filesystem.db_transaction(self.db) as tr:
-                print "COWABUNGA"
                 tr.update(obj)
-                print "EHH, Pizza"
 
     def rm(self, name, t=None, tr=None):
         try:
@@ -141,8 +136,7 @@ class Directory(Node):
 
         with tr or Filesystem.db_transaction(self.db) as tr:
             for obj in getattr(n, 'objs', None) or [n.obj]:
-                dirs = ValueSet(obj[u'directory'] - purge_list, t=t)
-                obj[u'directory'] = dirs
+                obj.set('directory', obj['directory'] - purge_list, t=t)
                 tr.update(obj)
 
     def add_file(self, name, ids, size, t=None):
@@ -184,8 +178,7 @@ class Split(Directory):
             for obj in self.objs:
                 ename = self._entry(obj.id)
                 if ename == name:
-                    dir = ValueSet(obj['directory'] - purge_list, t=t)
-                    obj['directory'] = dir
+                    obj.set('directory', obj['directory'] - purge_list, t=t)
                     tr.update(obj)
 
 

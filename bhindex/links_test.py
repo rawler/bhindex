@@ -9,7 +9,8 @@ import itertools
 from nose.tools import *
 from mock import Mock, MagicMock
 
-from distdb import DB, Object, ValueSet
+from distdb import DB, Object
+from distdb.obj import TimedValues
 from bithorde import proto
 
 
@@ -65,11 +66,11 @@ def test_DBExporter():
     db = DB(':memory:')
     with db.transaction() as t:
         t.update(Object(u"dir:apa", {
-            u'directory': ValueSet(u"dir:/apa"),
+            u'directory': TimedValues(u"dir:/apa"),
         }))
         t.update(Object('some_file', {
-            u'directory': ValueSet(u"dir:apa/movie"),
-            u'xt': ValueSet(xt),
+            u'directory': TimedValues(u"dir:apa/movie"),
+            u'xt': TimedValues(xt),
         }))
 
     asset = Mock()

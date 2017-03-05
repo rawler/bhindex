@@ -45,7 +45,7 @@ class MessageDecoder(object):
 class MessageEncoder(object):
     def __init__(self, msg_map):
         self._encoder_map = dict(
-           (name, _MessageEncoder(field.number, False, False)) for name, field in msg_map.iteritems()
+            (name, _MessageEncoder(field.number, False, False)) for name, field in msg_map.iteritems()
         )
 
     def __call__(self, tgt):

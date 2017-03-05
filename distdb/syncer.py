@@ -1,6 +1,6 @@
 import logging
 from cStringIO import StringIO
-from obj import ValueSet
+from obj import Set
 from uuid import uuid4 as uuid
 
 import concurrent
@@ -76,8 +76,10 @@ class SyncConnection(object):
                 self._log.warn("detecting remote db was reset")
                 self._last_serial_received = 0
 
-        self._log.info("%s is requesting from my #%d (is %d behind) ", self.peername, self._last_serial_sent, self.db.last_serial() - self._last_serial_sent)
-        self._log.info("%s is currently at #%d (I'm %d behind)", self.peername, peersetup.last_serial_in_db, peersetup.last_serial_in_db - self._last_serial_received)
+        self._log.info("%s is requesting from my #%d (is %d behind) ", self.peername,
+                       self._last_serial_sent, self.db.last_serial() - self._last_serial_sent)
+        self._log.info("%s is currently at #%d (I'm %d behind)", self.peername, peersetup.last_serial_in_db,
+                       peersetup.last_serial_in_db - self._last_serial_received)
 
         return self
 
@@ -99,7 +101,7 @@ class SyncConnection(object):
                 return False
 
             sock.settimeout(timeout)
-            if self._msg_queue(sock.recv(64*1024)):
+            if self._msg_queue(sock.recv(64 * 1024)):
                 return True
             else:
                 self.close()
@@ -149,7 +151,7 @@ class SyncConnection(object):
         for msg in chunk:
             if isinstance(msg, sync_pb2.Update):
                 chunk_had += 1
-                serial = transaction.update_attr(msg.obj, msg.key, ValueSet(msg.values, t=msg.tstamp))
+                serial = transaction.update_attr(msg.obj, msg.key, Set(msg.values, t=msg.tstamp))
                 if serial:
                     self._echo_prevention.add(serial)
                     chunk_applied += 1

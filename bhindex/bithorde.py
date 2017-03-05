@@ -3,7 +3,6 @@ from __future__ import absolute_import
 from base64 import b32encode, b32decode
 from warnings import warn
 
-from distdb import ValueSet
 from bithorde import message as proto
 
 
@@ -47,9 +46,9 @@ class Identifiers(frozenset):
         return tuple(self._to_proto_id(xt) for xt in self)
 
     def add_to(self, db, size, t=None):
-        xt = ValueSet(self.xt(), t=t)
+        xt = self.xt()
         obj = db[','.join(sorted(xt))]
-        obj[u'xt'] = xt
-        obj[u'filesize'] = ValueSet(unicode(size), t)
+        obj.set('xt', xt, t)
+        obj.set('filesize', unicode(size), t)
 
         return obj

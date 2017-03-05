@@ -31,7 +31,7 @@ class AddController(object):
         else:
             if mtime is None:
                 mtime = getmtime(unicode(path))
-            if (not force) and old_file.obj['xt'].t >= mtime:
+            if (not force) and old_file.obj.getitem('xt').t >= mtime:
                 raise FileExistsError(unicode(path))
         return old_file
 

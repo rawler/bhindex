@@ -10,7 +10,7 @@ from warnings import warn
 
 import concurrent
 from bithorde import parseHashIds, message
-from distdb import Transaction, ValueSet
+from distdb import Transaction
 
 if getattr(sys.stdout, 'encoding', 'UNDEFINED') is None:
     sys.stdout = codecs.getwriter('utf8')(sys.stdout)
@@ -161,7 +161,7 @@ def validAvailability(obj, t=time()):
 def _object_availability(obj, t):
     '''Returns (availability, time_since_check)'''
     try:
-        dbAvailability = obj[u'bh_availability']
+        dbAvailability = obj.getitem('bh_availability')
         avail = float(dbAvailability.any(0))
         time_since_check = t - dbAvailability.t
         return avail, time_since_check
@@ -170,8 +170,8 @@ def _object_availability(obj, t):
 
     # Legacy
     try:
-        dbStatus = obj[u'bh_status']
-        dbConfirmedStatus = obj[u'bh_status_confirmed']
+        dbStatus = obj.getitem('bh_status')
+        dbConfirmedStatus = obj.getitem('bh_status_confirmed')
         time_since_check = (t - dbConfirmedStatus.t)
         if dbStatus.any() == 'True':
             avail = dbConfirmedStatus.t - dbStatus.t
@@ -200,6 +200,7 @@ def calc_new_availability(status_ok, avail, seconds_since_check):
 
 def updateFolderAvailability(transaction, item, newAvail, t):
     tgt = t + newAvail ** AVAILABILITY_EXPONENT
+    availStr = unicode(newAvail)
 
     for dir_mapping in item.get(u'directory', []):
         dir_mapping = dir_mapping.split('/', 1)
@@ -211,7 +212,7 @@ def updateFolderAvailability(transaction, item, newAvail, t):
         if directory.empty():
             continue
 
-        objAvail = directory.get(u'bh_availability', 0)
+        objAvail = directory.getitem(u'bh_availability', 0)
         if objAvail:
             value = float(objAvail.any(0))
             if value > 0:
@@ -219,7 +220,7 @@ def updateFolderAvailability(transaction, item, newAvail, t):
             else:
                 objAvail = objAvail.t
         if tgt > objAvail:
-            directory[u'bh_availability'] = ValueSet(unicode(newAvail), t=t)
+            directory.set('bh_availability', availStr, t=t)
             transaction.update(directory)
             updateFolderAvailability(transaction, directory, newAvail, t)
 
@@ -237,13 +238,13 @@ def _checkAsset(bithorde, obj, t):
 
     del obj['bh_status']
     del obj['bh_status_confirmed']
-    obj['bh_availability'] = ValueSet(unicode(newAvail), t=t)
+    obj.set('bh_availability', unicode(newAvail), t=t)
 
     if status and (status.size is not None):
         if status.size > 2**40:
             warn("Implausibly large asset-size: %r - %r" % (obj, status))
             return obj, None
-        obj['filesize'] = ValueSet((unicode(status.size),), t=t)
+        obj.set('filesize', unicode(status.size), t=t)
 
     return obj, status_ok
 

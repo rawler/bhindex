@@ -4,7 +4,7 @@ from time import time
 
 import concurrent
 
-from obj import Object, ValueSet, ANY
+from obj import Object, TimedValues, ANY
 from _setup import create_DB
 
 # Pointers to empty list will be wiped after 30 days.
@@ -184,18 +184,20 @@ class Transaction(object):
                                            [(newlistid, value) for value in values])
         return newlistid
 
-    def update_attr(self, objid, key, values):
+    def update_attr(self, objid, key, assignment):
+        if not isinstance(assignment, TimedValues):
+            assignment = TimedValues(assignment)
         objid = self.db._get_id('obj', objid)
         keyid = self.db._getKeyId(key)
         tstamp = self.db._query_single(
             "SELECT timestamp FROM map WHERE objid = ? AND keyid = ?", (objid, keyid))
-        if values.t > tstamp:
-            newlistid = self._insert_list(values)
+        if assignment.t > tstamp:
+            newlistid = self._insert_list(assignment.v)
             with self.lock:
                 cursor = self.conn.cursor()
                 cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
                             VALUES (?, ?, ?, ?)""",
-                               (objid, keyid, values.t, newlistid))
+                               (objid, keyid, assignment.t, newlistid))
             return cursor.lastrowid
         else:
             return False
@@ -207,15 +209,15 @@ class Transaction(object):
         with self.lock:
             cursor = self.conn.cursor()
             for key in obj._dirty:
-                values = _dict[key]
+                assignment = _dict[key]
                 keyid = self.db._getKeyId(key)
                 old_timestamp = self.db._query_single(
                     "SELECT timestamp FROM map WHERE objid = ? and keyid = ?", (objid, keyid))
-                if not old_timestamp or values.t >= old_timestamp:
-                    listid = self._insert_list(values)
+                if not old_timestamp or assignment.t >= old_timestamp:
+                    listid = self._insert_list(assignment.v)
                     cursor.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
                                         VALUES (?, ?, ?, ?)""",
-                                   (objid, keyid, values.t, listid))
+                                   (objid, keyid, assignment.t, listid))
         obj._dirty.clear()
         return obj
 
@@ -305,7 +307,7 @@ class DB(object):
         for key, timestamp, listid in self._query_all(query, (objid,) + tuple(fields or ())):
             if listid is None:
                 continue
-            obj._dict[key] = ValueSet(v=(x for x, in self._query_all(
+            obj._dict[key] = TimedValues(v=(x for x, in self._query_all(
                 "SELECT value FROM list WHERE listid = ?", (listid,))), t=timestamp)
         return obj
 
