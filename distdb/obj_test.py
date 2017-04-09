@@ -1,5 +1,12 @@
 from nose.tools import *
 from distdb.obj import TimedValues, Object
+from time import time
+
+HOURS = 3600
+
+
+def future(n, unit):
+    return time() + n * unit
 
 
 @raises(TypeError)
@@ -92,3 +99,6 @@ def test_Object_mutation():
 
     o['apa'] = TimedValues(u'citron', 3)
     assert_equals(o[u'apa'], TimedValues([u'citron']).v)
+
+    o['apa'] = TimedValues(u'Bleh', future(100, HOURS))
+    assert_equals(o[u'apa'], TimedValues([u'Bleh']).v)

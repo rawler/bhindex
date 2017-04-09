@@ -1,4 +1,5 @@
 from nose.tools import *
+from time import time
 
 from distdb.serialize import *
 from distdb.syncer import *
@@ -7,6 +8,12 @@ from distdb import DB, Object, syncer, sync_pb2
 from .obj import Set
 
 import concurrent
+
+HOURS = 3600
+
+
+def future(n, unit):
+    return time() + n * unit
 
 
 def run_parallel(*jobs):
@@ -98,6 +105,20 @@ class TestSyncConnection():
         self.handshake()
 
         self.assert_equal(self.obj.id)
+        with self.db1.transaction() as t:
+            t.update(self.obj)
+        assert_in(u'apa', self.db1[self.obj.id])
+        assert_not_in(u'apa', self.db2[self.obj.id])
+
+        self.syncer1.db_push()
+        self.syncer2._step()
+        self.assert_equal(self.obj.id)
+
+    def test_future_change(self):
+        self.handshake()
+
+        self.assert_equal(self.obj.id)
+        self.obj.set('apa', u'This is the future', future(100, HOURS))
         with self.db1.transaction() as t:
             t.update(self.obj)
         assert_in(u'apa', self.db1[self.obj.id])

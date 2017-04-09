@@ -1,10 +1,17 @@
 from tempfile import mkdtemp
 from shutil import rmtree
 from os import path
+from time import time
 
 from nose.tools import *
 from distdb.obj import TimedValues, Set, Object
 from distdb.database import ANY, DB, Starts
+
+HOURS = 3600
+
+
+def future(n, unit):
+    return time() + n * unit
 
 
 class TempDir:
@@ -47,6 +54,13 @@ class TestInRam():
     def test_simple_object_put_get(self):
         assert_is_not_none(self.o)
         self.o[u'name'] = Set(u'Test Person')
+        with self.db.transaction() as t:
+            t.update(self.o)
+        assert_equal(self.db[self.o.id], self.o)
+
+    def test_future_object_put_get(self):
+        assert_is_not_none(self.o)
+        self.o.set(u'name', u'Future Person', future(100, HOURS))
         with self.db.transaction() as t:
             t.update(self.o)
         assert_equal(self.db[self.o.id], self.o)
@@ -120,6 +134,8 @@ class TestInRam():
             assert_equal(db.get(o.id)[u'key'], {u'apa'})
             t.update_attr(o.id, 'key', TimedValues(o[u'key']))
             assert_equal(db.get(o.id)[u'key'], o[u'key'])
+            t.update_attr(o.id, 'key', TimedValues(u"future", future(100, HOURS)))
+            assert_equal(db.get(o.id)[u'key'], set((u"future",)))
 
     def test_del_attr(self):
         db, o1 = self.db, self.o
