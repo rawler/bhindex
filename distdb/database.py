@@ -19,6 +19,10 @@ class Starts(tuple):
         return super(Starts, cls).__new__(cls, v)
 
 
+class TimedBefore(int):
+    pass
+
+
 def _sql_query_starts(k, v):
     crit = ' OR '.join("value GLOB '%s*'" % x.replace("'", "''") for x in v)
     query = """SELECT DISTINCT objid FROM map
@@ -37,6 +41,9 @@ def _sql_condition(k, v):
     any_query = """SELECT DISTINCT objid FROM map
                      NATURAL JOIN key
                      WHERE key = ? AND listid IS NOT NULL"""
+    timed_before_query = """SELECT DISTINCT objid FROM map
+                     NATURAL JOIN key
+                     WHERE key = ? AND listid IS NOT NULL AND timestamp < ?"""
     absent_query = """SELECT DISTINCT objid FROM obj
                         WHERE NOT EXISTS (
                           SELECT 1 FROM map
@@ -49,6 +56,8 @@ def _sql_condition(k, v):
         return (absent_query, (k,))
     elif isinstance(v, Starts):
         return _sql_query_starts(k, v)
+    elif isinstance(v, TimedBefore):
+        return (timed_before_query, (k, v))
     else:
         return (equal_query, (k, v))
 
@@ -85,7 +94,7 @@ def _sql_for_keyed_query(crit, key, offset, sortmeth):
     selection = """SELECT DISTINCT objid, value FROM %s
 NATURAL JOIN key
 NATURAL JOIN list
-    WHERE key = '%s' ORDER BY %s, objid %s""" % (selection, key, sort_key, direction)
+    WHERE key = '%s' ORDER BY %s %s, objid""" % (selection, key, sort_key, direction)
 
     if offset:
         selection = selection + (" LIMIT -1 OFFSET %d" % offset)
@@ -101,6 +110,10 @@ class Sorting:
     @staticmethod
     def split(character):
         return lambda: ("substr(value, instr(value, ?))", [character])
+
+    @staticmethod
+    def timestamp():
+        return "timestamp", []
 
 
 class Transaction(object):
@@ -229,6 +242,7 @@ class Transaction(object):
             self.conn.execute("""INSERT OR REPLACE INTO map (objid, keyid, timestamp, listid)
                             SELECT objid, keyid, ?, NULL FROM map WHERE objid = ?""", (t, objid))
 
+
 class DB(object):
     ANY = ANY
     Starts = Starts
@@ -352,16 +366,22 @@ class DB(object):
                 return listid
 
     def vacuum(self, delete_grace=DEFAULT_GRACE):
+        Q_CLEAN_MAP = "SELECT DISTINCT list.listid FROM list LEFT JOIN map ON (map.listid = list.listid) WHERE map.listid IS NULL"
+        Q_CLEAN_LIST = "SELECT DISTINCT key.keyid FROM key LEFT JOIN map ON (key.keyid = map.keyid) WHERE map.keyid IS NULL"
+        Q_CLEAN_OBJS = "SELECT DISTINCT obj.objid FROM obj LEFT JOIN map ON (obj.objid = map.objid) WHERE map.objid IS NULL"
+
         with self.lock:
-            if delete_grace is not None:
-                self.conn.execute("DELETE FROM map WHERE timestamp < ? AND listid IS NULL", (time() - delete_grace,))
-            for x, in self._query_all("SELECT DISTINCT list.listid FROM list LEFT JOIN map ON (map.listid = list.listid) WHERE map.listid IS NULL", ()):
-                self.conn.execute("DELETE FROM list WHERE listid = ?", (x,))
-            for x, in self._query_all("SELECT DISTINCT key.keyid FROM key LEFT JOIN map ON (key.keyid = map.keyid) WHERE map.keyid IS NULL", ()):
-                self.conn.execute("DELETE FROM key WHERE key.keyid = ?", (x,))
-            for x, in self._query_all("SELECT DISTINCT obj.objid FROM obj LEFT JOIN map ON (obj.objid = map.objid) WHERE map.objid IS NULL", ()):
-                self.conn.execute("DELETE FROM obj WHERE obj.objid = ?", (x,))
-            self.conn.execute("VACUUM")
+            with self.transaction():
+                if delete_grace is not None:
+                    self.conn.execute("DELETE FROM map WHERE timestamp < ? AND listid IS NULL", (time() - delete_grace,))
+                for x, in self._query_all(Q_CLEAN_MAP, ()):
+                    self.conn.execute("DELETE FROM list WHERE listid = ?", (x,))
+                for x, in self._query_all(Q_CLEAN_LIST, ()):
+                    self.conn.execute("DELETE FROM key WHERE key.keyid = ?", (x,))
+                for x, in self._query_all(Q_CLEAN_OBJS, ()):
+                    self.conn.execute("DELETE FROM obj WHERE obj.objid = ?", (x,))
+
+        self.conn.execute("VACUUM")
 
     def get_public_mappings_after(self, serial=0, limit=1024):
         for obj, key, tstamp, serial, listid in self._query_all("SELECT obj, key, timestamp, serial, listid FROM map NATURAL JOIN key NATURAL JOIN obj WHERE serial > ? AND NOT key LIKE '@%' ORDER BY serial LIMIT ?", (serial, limit)):
