@@ -3,7 +3,7 @@ from os.path import normpath as osnormpath
 from time import time
 from warnings import warn
 
-from distdb import Object, Starts, ValueSet
+from distdb import Object, Starts, ValueSet, Sorting
 from .bithorde import Identifiers
 log = getLogger('tree')
 
@@ -45,29 +45,47 @@ def split_directory_entry(dirent):
     return dir, name
 
 
+def itermerged(gen, collection=set):
+    gen = iter(gen)
+    (key, values) = gen.next()
+    values = [values]
+    for k, v in gen:
+        if k == key:
+            values.append(v)
+        else:
+            yield key, collection(values)
+            key, values = k, [v]
+    yield key, collection(values)
+
+
 class Directory(Node):
     def _map(self, objs, name):
         if any(o.any('xt') for o in objs):
             if len(objs) > 1:
                 return Split(self, objs, name)
             else:
-                return File(self, objs[0])
+                return File(self, next(iter(objs)))
         else:
             return Directory(self, objs)
 
     def ls(self):
-        d = dict()
-        for dirobj in self.objs:
-            for child in self.db.query({u'directory': Starts("%s/" % dirobj.id)}):
-                for dirent in child[u'directory']:
-                    try:
-                        dir, name = split_directory_entry(dirent)
-                    except ValueError:
-                        warn("Malformed directory for %s: %s" % (child.id, dirent))
-                    if dir == dirobj.id:
-                        d.setdefault(name, []).append(child)
-        for name, objs in sorted(d.iteritems()):
-            yield name, self._map(objs, name)
+        for name, children in itermerged(self._ls()):
+            yield name, self._map(children, name)
+
+    def _ls(self):
+        dirids = set("%s" % dirobj.id for dirobj in self.objs)
+        children = self.db.query_keyed(
+            {'directory': Starts("%s/" % d for d in dirids)}, key="+directory",
+            sortmeth=Sorting.split('/'), fields=('directory', 'xt'),
+        )
+        for dirent, child in children:
+            try:
+                dir, name = split_directory_entry(dirent)
+            except ValueError:
+                warn("Malformed directory for %s: %s" % (child.id, dirent))
+                continue
+            if dir in dirids:
+                yield name, child
 
     def __iter__(self):
         return self.ls()
@@ -138,8 +156,8 @@ class Split(Directory):
     def _entry(self, id):
         return "%s%s" % (id.replace("/", "_"), self._ext)
 
-    def ls(self):
-        for obj in self.objs:
+    def ls(self, offset=0):
+        for obj in self.objs[offset:]:
             name = self._entry(obj.id)
             yield name, self._map((obj,), name)
 
@@ -154,7 +172,7 @@ class Split(Directory):
         for obj in self.objs:
             ename = self._entry(obj.id)
             if ename == name:
-                dir = ValueSet(obj['directory']-purge_list, t=t)
+                dir = ValueSet(obj['directory'] - purge_list, t=t)
                 obj['directory'] = dir
                 self.db.update(obj)
 
