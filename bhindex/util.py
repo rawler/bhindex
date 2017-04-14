@@ -17,8 +17,12 @@ if getattr(sys.stdout, 'encoding', 'UNDEFINED') is None:
 if getattr(sys.stderr, 'encoding', 'UNDEFINED') is None:
     sys.stderr = codecs.getwriter('utf8')(sys.stderr)
 
-AVAILABILITY_BONUS = 0.02
-AVAILABILITY_EXPONENT = 0.77
+AVAILABILITY_BASE_CHANGE = 600
+AVAILABILITY_ALTENATOR = 0.4
+UNCHANGED_WAIT_FACTOR = 0.04
+CHANGE_WAIT_VALUE = 60
+
+statusLog = logging.getLogger('statusLog')
 
 
 class Counter(object):
@@ -141,67 +145,48 @@ def hasValidStatus(obj, t=None):
 
 
 def validAvailability(obj, t=None):
-    '''Returns the number of seconds the object is believed to have been available/unavailable, or None for outdated cache'''
-    availability, time_since_check = _object_availability(obj, t or time())
+    '''Returns availability score, or None for outdated cache'''
+    availability, valid_until = _object_availability(obj)
 
-    valid_for = (abs(availability or 0) ** AVAILABILITY_EXPONENT) - (time_since_check or 0)
-
-    log = logging.getLogger('hasValidStatus')
+    t = t or time()
+    valid_for = valid_until - t
     if valid_for > 0:
-        log.debug("%s: Current availability %d valid for another %s", object_string(obj), availability, Duration(valid_for))
-        if availability > 0:
-            return availability - time_since_check
-        else:
-            return availability + time_since_check
+        statusLog.debug("%s: Current availability %d valid for another %s", object_string(obj), availability, Duration(valid_for))
+        return availability
     else:
-        log.debug("%s: Current availability %d invalid since %s", object_string(obj), availability, Duration(-valid_for))
+        statusLog.debug("%s: Current availability %d invalid since %s", object_string(obj), availability, Duration(-valid_for))
         return None
 
 
-def _object_availability(obj, t):
-    '''Returns (availability, time_since_check)'''
-    try:
-        dbAvailability = obj.getitem('bh_availability')
-        avail = float(dbAvailability.any(0))
-        time_since_check = t - dbAvailability.t
-        return avail, time_since_check
-    except:
-        pass
-
-    # Legacy
-    try:
-        dbStatus = obj.getitem('bh_status')
-        dbConfirmedStatus = obj.getitem('bh_status_confirmed')
-        time_since_check = (t - dbConfirmedStatus.t)
-        if dbStatus.any() == 'True':
-            avail = dbConfirmedStatus.t - dbStatus.t
-        else:
-            avail = -(dbConfirmedStatus.t - dbStatus.t)
-        return avail, time_since_check
-    except:
-        pass
-
-    return 0, 0
+def _object_availability(obj):
+    '''Returns (availability, valid_until)'''
+    dbAvailability = obj.getitem('bh_availability')
+    if dbAvailability:
+        return float(dbAvailability.any(0)), dbAvailability.t
+    else:
+        return 0, 0
 
 
-def calc_new_availability(status_ok, avail, seconds_since_check):
-    if seconds_since_check is None:
-        seconds_since_check = 1800
+def calc_new_availability(status_ok, avail):
+    '''Return (new_availability, validity_seconds)'''
     if avail is None:
         avail = 0
 
-    bonus = seconds_since_check * AVAILABILITY_BONUS
-
-    if status_ok:
-        return max(avail, 0) + bonus
+    if avail and (avail > 0) == status_ok:
+        if status_ok:
+            new_availability = avail + AVAILABILITY_BASE_CHANGE
+        else:
+            new_availability = avail - AVAILABILITY_BASE_CHANGE
+        return new_availability, abs(new_availability * UNCHANGED_WAIT_FACTOR)
     else:
-        return min(avail, 0) - bonus
+        if status_ok:
+            new_availability = AVAILABILITY_BASE_CHANGE
+        else:
+            new_availability = avail * AVAILABILITY_ALTENATOR - AVAILABILITY_BASE_CHANGE
+        return new_availability, CHANGE_WAIT_VALUE
 
 
-def updateFolderAvailability(transaction, item, newAvail, t):
-    tgt = t + newAvail ** AVAILABILITY_EXPONENT
-    availStr = unicode(newAvail)
-
+def updateFolderAvailability(transaction, item, t):
     for dir_mapping in item.get(u'directory', []):
         dir_mapping = dir_mapping.split('/', 1)
         if not len(dir_mapping) == 2:
@@ -212,20 +197,14 @@ def updateFolderAvailability(transaction, item, newAvail, t):
         if directory.empty():
             continue
 
-        objAvail = directory.getitem(u'bh_availability', 0)
-        if objAvail:
-            value = float(objAvail.any(0))
-            if value > 0:
-                objAvail = objAvail.t + value ** AVAILABILITY_EXPONENT
-            else:
-                objAvail = objAvail.t
-        if tgt > objAvail:
-            directory.set('bh_availability', availStr, t=t)
+        objAvail = directory.getitem(u'bh_availability', None)
+        if objAvail is None or t > objAvail.t:
+            directory.set('bh_availability', unicode(AVAILABILITY_BASE_CHANGE), t=t)
             transaction.update(directory)
-            updateFolderAvailability(transaction, directory, newAvail, t)
+            updateFolderAvailability(transaction, directory, t)
 
 
-def _checkAsset(bithorde, obj, t):
+def _checkAsset(bithorde, obj, now):
     ids = parseHashIds(obj.get('xt', tuple()))
     if not ids:
         return obj, None
@@ -233,32 +212,32 @@ def _checkAsset(bithorde, obj, t):
     with bithorde.open(ids) as bhAsset:
         status = bhAsset.status()
         status_ok = status and status.status == message.SUCCESS or False
-    avail, time_since_check = _object_availability(obj, t)
-    newAvail = calc_new_availability(status_ok, avail, time_since_check)
+    avail, _ = _object_availability(obj)
+    newAvail, valid_for = calc_new_availability(status_ok, avail)
 
     del obj['bh_status']
     del obj['bh_status_confirmed']
-    obj.set('bh_availability', unicode(newAvail), t=t)
+    obj.set('bh_availability', unicode(newAvail), t=now + valid_for)
 
     if status and (status.size is not None):
         if status.size > 2**40:
             warn("Implausibly large asset-size: %r - %r" % (obj, status))
             return obj, None
-        obj.set('filesize', unicode(status.size), t=t)
+        obj.set('filesize', unicode(status.size), t=now)
 
     return obj, status_ok
 
 
-def _cachedCheckAsset(bithorde, obj, t):
-    dbStatus = hasValidStatus(obj, t)
+def _cachedCheckAsset(bithorde, obj, now, required_validity):
+    dbStatus = hasValidStatus(obj, required_validity)
     if dbStatus is None:
-        return _checkAsset(bithorde, obj, t)
+        return _checkAsset(bithorde, obj, now)
     else:
         concurrent.sleep()  # Not sleeping here could starve other greenlets
         return obj, dbStatus
 
 
-def _scan_assets(bithorde, objs, transaction, checker, t):
+def _scan_assets(bithorde, objs, transaction, checker):
     assetsChecked = Counter()
     cacheUse = Counter()
     available = Counter()
@@ -268,9 +247,9 @@ def _scan_assets(bithorde, objs, transaction, checker, t):
 
         if obj.dirty():
             if transaction:
-                new_avail = float(obj.any('bh_availability'))
-                if new_avail > 0:
-                    updateFolderAvailability(transaction, obj, new_avail, t)
+                new_avail = obj.getitem('bh_availability')
+                if float(new_avail.any(0)) > 0:
+                    updateFolderAvailability(transaction, obj, new_avail.t)
 
                 transaction.update(obj)
                 transaction.yield_from(2)
@@ -294,22 +273,23 @@ def _scan_assets(bithorde, objs, transaction, checker, t):
                assetsChecked, cacheUse, cacheUsePercent, available, availablePercent)
 
 
-def cachedAssetLiveChecker(bithorde, objs, db=None, force=False):
-    t = time()
+def cachedAssetLiveChecker(bithorde, objs, db=None, force=False, required_validity=None):
+    required_validity = required_validity or time()
+    now = time()
 
     if force:
         def checker(obj):
-            return _checkAsset(bithorde, obj, t)
+            return _checkAsset(bithorde, obj, now)
     else:
         def checker(obj):
-            return _cachedCheckAsset(bithorde, obj, t)
+            return _cachedCheckAsset(bithorde, obj, now, required_validity)
 
     if db:
         with db.transaction(Transaction.IMMEDIATE) as transaction:
-            for x in _scan_assets(bithorde, objs, transaction, checker, t):
+            for x in _scan_assets(bithorde, objs, transaction, checker):
                 yield x
     else:
-        for x in _scan_assets(bithorde, objs, None, checker, t):
+        for x in _scan_assets(bithorde, objs, None, checker):
             yield x
 
 
@@ -353,19 +333,3 @@ class RepeatingTimer(object):
 
     def cancel(self):
         self.running = None
-
-
-def NoOpContextManager(ctx_mgr):
-    if ctx_mgr is None:
-        return None
-    res = copy(ctx_mgr)
-
-    print "Cloning"
-
-    res.__enter__ = lambda _: res
-
-    def __exit__(_t, _v, _tb):
-        print "Was here"
-    res.__exit__ = __exit__
-
-    return res

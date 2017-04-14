@@ -46,7 +46,7 @@ class TestFilesystem(object):
             self.f = t.update(Object('some_file', {
                 'directory': TimedValues(u"dir:some/dir/file.ext", 0),
                 'xt': TimedValues(xt),
-                'bh_availability': TimedValues(u"4000000", 0),
+                'bh_availability': TimedValues(u"4000000", 15),
             }))
         self.fs = Filesystem(db)
 
@@ -87,7 +87,7 @@ class TestFilesystem(object):
 
         self.db.transaction().update(Object(u"dir:some/dir", {
             'directory': TimedValues(u"dir:/apa", 0),
-            'bh_availability': TimedValues(u"4000000", 0),
+            'bh_availability': TimedValues(u"4000000", 15),
         }))
 
         assert_set_equal(name_type_ids_set(fs.root().ls(t=1)), fz(
@@ -95,7 +95,7 @@ class TestFilesystem(object):
 
         self.db.transaction().update(Object(u"dir:redundant", {
             'directory': TimedValues(u"dir:/apa", 0),
-            'bh_availability': TimedValues(u"4000000", 0),
+            'bh_availability': TimedValues(u"4000000", 15),
         }))
         root = list(fs.root().ls(t=1))
         assert_set_equal(name_type_ids_set(root), fz(
@@ -129,7 +129,7 @@ class TestFilesystem(object):
         with self.fs.transaction() as t:
             f2 = t.update(Object('some_file_colliding_dir', {
                 'directory': TimedValues(u"dir:some/dir/file.ext", 0),
-                'bh_availability': TimedValues(u"4000000", 0),
+                'bh_availability': TimedValues(u"4000000", 15),
             }))
 
         assert_set_equal(name_type_ids_set(self.fs.lookup(P('apa')).ls(t=1)), fz(

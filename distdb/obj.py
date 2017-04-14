@@ -136,7 +136,7 @@ class Object(object):
             value = TimedValues(value, _sys_time())
 
         current = self._dict.get(key, None)
-        if (not current) or (value.t >= current.t) and (value.v != current.v):
+        if (not current) or value.t >= current.t:
             self._dict[key] = value
             self._dirty.add(key)
 

@@ -8,28 +8,28 @@ log = logging.getLogger("vacuum")
 
 
 def prepare_args(parser, config):
-    parser.add_argument("--wipe", metavar="DAYS", action="store", dest="wipe", type=int,
-                        help="Wipe assets unavailable for at least given DAYS")
+    parser.add_argument("--wipe", metavar="SCORE", action="store", dest="wipe", type=int,
+                        help="Wipe assets below negative SCORE availability. Typically '100000'")
     parser.set_defaults(main=main)
 
 
-def wipe(config, db, days):
-    seconds = -(3600 * 24 * days)
+def wipe(config, db, availability):
     t = time()
 
     total = Counter()
     wiped = Counter()
-    for obj in db.query({'bh_availability': ANY}):
-        total.inc()
-        if (validAvailability(obj, t) or 0) < seconds:
-            del db[obj]
-            wiped.inc()
-    log.info("Wiped %d objects out of %d (unavailable for > %d days)", wiped, total, days)
+    with db.transaction() as tr:
+        for obj in db.query({'bh_availability': ANY}):
+            total.inc()
+            if (validAvailability(obj, t) or 0) < availability:
+                tr.delete(obj, t)
+                wiped.inc()
+        tr.yield_from(1)
+    log.info("Wiped %d objects out of %d (availability < %d)", wiped, total, availability)
 
 
 def main(args, config, db):
     if args.wipe:
-        wipe(config, db, args.wipe)
+        wipe(config, db, -args.wipe)
 
-    with db.transaction():
-        db.vacuum()
+    db.vacuum()
