@@ -56,7 +56,7 @@ class Connection:
                 self.buf += self._read()
 
     def _read(self):
-        new = self._socket.recv(128*1024)
+        new = self._socket.recv(128 * 1024)
         if new:
             return new
         else:
@@ -115,7 +115,7 @@ class Asset(BaseAsset):
             if not self._client:
                 return None
 
-            timeout = (self._client.config['asset_timeout']+200) / 1000.0
+            timeout = (self._client.config['asset_timeout'] + 200) / 1000.0
             try:
                 return self._statusWatch.wait(timeout)
             except concurrent.Timeout:
@@ -144,7 +144,7 @@ class Asset(BaseAsset):
         offset = 0
         size = self.status().size
         while offset < size:
-            chunk = self.read(offset, 128*1024)
+            chunk = self.read(offset, 128 * 1024)
             yield chunk
             offset += len(chunk)
 
@@ -164,7 +164,7 @@ class UploadAsset(BaseAsset):
 
     def write_all(self, f):
         offset = 0
-        for block in read_in_chunks(f, 64*1024):
+        for block in read_in_chunks(f, 64 * 1024):
             self._client._connection.send(message.DataSegment(handle=self._handle, offset=offset, content=block))
             offset += len(block)
 
@@ -264,7 +264,7 @@ class Client:
 
     def _close(self, handle):
         self._assets[handle] = getattr(self._assets[handle], '_status', None)
-        self._connection.send(message.BindRead(handle=handle, timeout=1000*3600))
+        self._connection.send(message.BindRead(handle=handle, timeout=1000 * 3600))
 
     def _reader(self):
         for msg in self._connection:
@@ -275,7 +275,7 @@ class Client:
             elif isinstance(msg, message.Ping):
                 self._connection.send(message.Ping())
             else:
-                print "Unhandled message: ", type(msg), msg
+                logger.warn("Unhandled message: %s %s", type(msg), msg)
         # TODO: handle closing assets on connection close
 
     def _processStatus(self, status):
@@ -283,7 +283,7 @@ class Client:
         try:
             asset = self._assets[handle]
         except KeyError:
-            print "Warning: got status about unkown asset", status
+            logger.warn("got status about unkown asset", status)
             return
 
         if hasattr(asset, '_processStatus'):
@@ -308,9 +308,10 @@ class Client:
         else:
             logger.warn("ReadResponse %d recieved twice", response.reqId)
 
+
 def parseConfig(c):
     return dict(
-        pressure = int(c['pressure']),
-        address = c['address'],
-        asset_timeout = int(c['asset_timeout']),
+        pressure=int(c['pressure']),
+        address=c['address'],
+        asset_timeout=int(c['asset_timeout']),
     )
