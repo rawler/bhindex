@@ -1,5 +1,5 @@
 import logging
-from . import add, cat, config, links, scanner, syncer, tree, vacuum
+from . import add, cat, config, fusefs, links, scanner, syncer, tree, vacuum
 
 
 def main(args=None):
@@ -31,6 +31,9 @@ def main(args=None):
 
     LS = subparsers.add_parser('ls', help='List files in a directory of BHIndex')
     tree.prepare_ls_args(LS, cfg)
+
+    MOUNT = subparsers.add_parser('mount', help='Mount bhindex as a FUSE file system')
+    fusefs.prepare_args(MOUNT, cfg)
 
     MV = subparsers.add_parser('mv', help='Move a file or directory in the bithorde tree')
     tree.prepare_mv_args(MV, cfg)

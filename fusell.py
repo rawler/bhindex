@@ -14,6 +14,7 @@
 
 from __future__ import division
 
+from contextlib import contextmanager
 from ctypes import *
 from ctypes.util import find_library as _find_library
 from errno import *
@@ -298,42 +299,44 @@ def _copy_value(x):
         return x
 
 
+@contextmanager
+def _transient_directory(dir):
+    existed = path.exists(dir)
+    if not existed:
+        os.mkdir(dir)
+    try:
+        yield
+    finally:
+        if not existed:
+            os.rmdir(self._dir)
+
+
 class FUSELL(object):
     def __init__(self, filesystem, mountpoint, fuse_options=[], parallel=8):
         self.filesystem = filesystem
         self.mountpoint = mountpoint
         self.fuse_options = fuse_options
         self.parallel = parallel
-        self._chan = self._pool = None
 
     def run(self):
-        assert self._chan is None
-
         args = ['fuse']
         for opt in self.fuse_options:
             args += ['-o', opt]
         argv = fuse_args(len(args), (c_char_p * len(args))(*args), 0)
 
-        self._pool = Pool(size=self.parallel)
+        pool = Pool(size=self.parallel)
 
-        self._chan = libfuse.fuse_mount(self.mountpoint, argv)
-        assert self._chan
+        with _transient_directory(self.mountpoint):
+            chan = libfuse.fuse_mount(self.mountpoint, argv)
+            assert chan
 
-        try:
-            self._fuse_run_session(argv)
-        finally:
-            self.unmount()
+            try:
+                self._fuse_run_session(argv, chan, pool)
+            finally:
+                libfuse.fuse_unmount(self.mountpoint, chan)
+                pool.waitall()
 
-    def unmount(self):
-        chan = self._chan
-        pool = self._pool
-        self._chan = self._pool = None
-        if chan:
-            libfuse.fuse_unmount(self.mountpoint, chan)
-        if pool:
-            pool.waitall()
-
-    def _dispatcher(self, method):
+    def _dispatcher(self, pool, method):
         def _handler(req, *args):
             try:
                 return method(req, *args)
@@ -343,11 +346,10 @@ class FUSELL(object):
         def _dispatch(req, *args):
             # Copy pointer-values in args. They will not be valid later
             args = [_copy_value(x) for x in args]
-            self._pool.spawn(_handler, req, *args)
+            pool.spawn(_handler, req, *args)
         return _dispatch
 
-    def _fuse_run_session(self, argv):
-        chan = self._chan
+    def _fuse_run_session(self, argv, chan, pool):
         fuse_ops = fuse_lowlevel_ops()
 
         for name, prototype in fuse_lowlevel_ops._fields_:
@@ -355,7 +357,7 @@ class FUSELL(object):
             if method:
                 args = prototype._argtypes_
                 if len(args) and args[0] is fuse_req_t:
-                    setattr(fuse_ops, name, prototype(self._dispatcher(method)))
+                    setattr(fuse_ops, name, prototype(self._dispatcher(pool, method)))
                 else:
                     setattr(fuse_ops, name, prototype(method))
 
@@ -369,8 +371,6 @@ class FUSELL(object):
                     trampoline(fd, read=True)
                     data = create_string_buffer(64 * 1024)
                     read = libfuse.fuse_chan_recv(c_void_p_p(c_void_p(chan)), data, len(data))
-                    if not self._chan:
-                        break
                     assert read > 0
                     libfuse.fuse_session_process(session, data[0:read], read, chan)
             finally:
