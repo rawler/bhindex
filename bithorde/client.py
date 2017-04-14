@@ -263,7 +263,7 @@ class Client:
         return self._pool
 
     def _close(self, handle):
-        self._assets[handle] = self._assets[handle]._status
+        self._assets[handle] = getattr(self._assets[handle], '_status', None)
         self._connection.send(message.BindRead(handle=handle, timeout=1000*3600))
 
     def _reader(self):
@@ -289,8 +289,9 @@ class Client:
         if hasattr(asset, '_processStatus'):
             asset._processStatus(status)
         else:
-            if status.status != asset.status and (status.ids or status.status == message.SUCCESS):
-                logger.debug("Ignoring late %s response on closing asset (%s)", message._STATUS.values_by_number[status.status].name)
+            if status.ids or status.status != message.NOTFOUND:
+                if asset and asset.status != status.status:
+                    logger.debug("Ignoring late %s response on closing asset (%s)", message._STATUS.values_by_number[status.status].name)
             else:
                 del self._assets[handle]
                 self._handleAllocator.free(handle)
