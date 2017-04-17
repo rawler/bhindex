@@ -18,6 +18,8 @@ class FoundError(LookupError):
 
 
 class Node(object):
+    __slots__ = ('db', 'objs')
+
     def __init__(self, ctx, objs):
         self.db = getattr(ctx, 'db', ctx)
         self.objs = objs
@@ -157,6 +159,8 @@ class Directory(Node):
 
 
 class Split(Directory):
+    __slots__ = ('_dir', '_conflictname', '_ext')
+
     def __init__(self, ctx, objs, conflictname):
         super(Split, self).__init__(ctx, objs)
         self._dir = ctx

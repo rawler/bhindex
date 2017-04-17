@@ -53,6 +53,8 @@ class TimedValues:
 
 
 class Object(object):
+    __slots__ = ('id', '_dirty', '_dict')
+
     def __init__(self, objid, init={}):
         self.id = objid
         self._dirty = set()
