@@ -26,7 +26,10 @@ def create_DB(conn):
             FOREIGN KEY (keyid) REFERENCES key (keyid),
             FOREIGN KEY (listid) REFERENCES list (listid)
         );
+        CREATE INDEX IF NOT EXISTS map_obj_values ON map (objid, listid);
         CREATE INDEX IF NOT EXISTS map_list ON map (listid);
+        CREATE INDEX IF NOT EXISTS map_timestamp ON map (timestamp);
+        CREATE INDEX IF NOT EXISTS map_key_timestamp ON map (keyid, timestamp);
 
         CREATE TABLE IF NOT EXISTS list (
             itemid INTEGER PRIMARY KEY AUTOINCREMENT,
