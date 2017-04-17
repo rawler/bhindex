@@ -283,7 +283,7 @@ class Client:
         try:
             asset = self._assets[handle]
         except KeyError:
-            logger.warn("got status about unkown asset", status)
+            logger.warn("got status about unkown asset: %s", status)
             return
 
         if hasattr(asset, '_processStatus'):
