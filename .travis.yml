@@ -1,6 +1,12 @@
 language: python
 python:
 - '2.7'
+addons:
+  apt:
+    sources:
+      - travis-ci/sqlite3
+    packages:
+      - sqlite3
 env:
   global:
   - secure: N6yYHQvzkcL9qeyAphzNpFvD/djP87FRQfz+QFVmUnQUmYgJqq+iLaYYDu+LR6yslu/9vz2HvQAEoxq1VfwCC5TjR3Lsnh5u5rl6pncnvIhQYTSZuiUkp+SZe/pdkVejnHXuDC9oihhEqYw2O6YrT5Zj5kL1/ql7e3c7Gk0OmjI=
