@@ -1,6 +1,5 @@
 from __future__ import absolute_import
 
-from copy import copy
 import codecs
 import logging
 import sys
@@ -82,6 +81,17 @@ class Duration(float):
             return "%d weeks" % (x / 7)
         else:
             return "%d years" % (x / 365.25)
+
+
+class Timer:
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.epoch = time()
+
+    def elapsed(self):
+        return Duration(time() - self.epoch)
 
 
 class DelayedAction(object):
@@ -241,6 +251,7 @@ def _scan_assets(bithorde, objs, transaction, checker):
     assetsChecked = Counter()
     cacheUse = Counter()
     available = Counter()
+    timer = Timer()
 
     for obj, status in bithorde.pool().imap(checker, objs):
         assetsChecked.inc()
@@ -269,18 +280,19 @@ def _scan_assets(bithorde, objs, transaction, checker):
         availablePercent = 100
     logging \
         .getLogger('cachedAssetLiveChecker') \
-        .debug("%d assets status-checked. %d cached statuses used (%d%%). %d available (%d%%).",
-               assetsChecked, cacheUse, cacheUsePercent, available, availablePercent)
+        .debug("%d assets status-checked in %s. %d cached statuses used (%d%%). %d available (%d%%).",
+               assetsChecked, timer.elapsed(), cacheUse, cacheUsePercent, available, availablePercent)
 
 
 def cachedAssetLiveChecker(bithorde, objs, db=None, force=False, required_validity=None):
-    required_validity = required_validity or time()
     now = time()
 
     if force:
         def checker(obj):
             return _checkAsset(bithorde, obj, now)
     else:
+        required_validity = required_validity or time()
+
         def checker(obj):
             return _cachedCheckAsset(bithorde, obj, now, required_validity)
 
