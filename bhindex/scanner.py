@@ -1,20 +1,27 @@
 from __future__ import absolute_import
 
-from itertools import islice
+from itertools import chain, islice
 from logging import getLogger
-from random import shuffle
+from random import randint
 from time import time
 from warnings import warn
+
+from concurrent import sleep
 
 from bithorde import Client, parseConfig
 from bhindex.util import cachedAssetLiveChecker
 from distdb import ANY, Sorting, TimedBefore
 
 SAFETY = 60
+FUDGE = 30
 MAX_BATCH = 1000
+MIN_SLEEP = 0.0001
 
 
 class Scanner(object):
+    fields = ('bh_availability', 'xt', 'directory')
+    log = getLogger('scanner')
+
     def __init__(self, db, bithorde):
         self.db = db
         self.bithorde = bithorde
@@ -22,8 +29,39 @@ class Scanner(object):
         self.processed = 0
         self.size = 0
 
-    def run(self, objs, t, force):
-        for obj, status_ok in cachedAssetLiveChecker(self.bithorde, objs, db=self.db, force=force, required_validity=t):
+    def pick_batch(self, expires_before, limit=MAX_BATCH):
+        objs = chain(
+            ((0, id) for id in self.db.query_ids({
+                'xt': ANY,
+                'bh_availability': None,
+            })),
+            ((obj.getitem('bh_availability').t, obj.id) for _, obj in
+                self.db.query_keyed({
+                    'xt': ANY,
+                    'bh_availability': TimedBefore(expires_before),
+                }, '+bh_availability', fields=self.fields,
+                sortmeth=Sorting.timestamp))
+        )
+        return islice(objs, limit)
+
+    def _fudged_batch(self, expires_before, fudge=FUDGE):
+        batch = self.pick_batch(expires_before + fudge)
+        fudged_batch = ((t - randint(0, fudge), id) for t, id in batch)
+        return ((t, id) for t, id in fudged_batch if t < expires_before)
+
+    def run(self):
+        while True:
+            limit = time() + SAFETY
+            batch = sorted(self._fudged_batch(limit))
+            if batch:
+                sleep(max(batch[0][0] - limit, MIN_SLEEP))
+                self.run_batch((self.db[id] for _, id in batch))
+
+    def run_batch(self, objs):
+        self.available = 0
+        self.processed = 0
+
+        for obj, status_ok in cachedAssetLiveChecker(self.bithorde, objs, db=self.db, force=True):
             self.processed += 1
             if not status_ok:
                 continue
@@ -44,30 +82,14 @@ def prepare_args(parser, config):
     parser.set_defaults(main=main)
 
 
-def pick_and_shuffle(objs):
-    objs = list(islice((obj for _, obj in objs), MAX_BATCH))
-    shuffle(objs)
-    return objs
-
-
 def main(args, config, db):
     bithorde = Client(parseConfig(config.items('BITHORDE')))
 
     scanner = Scanner(db, bithorde)
 
-    log = getLogger('scanner')
-    t = time() + SAFETY
-    fields = ('bh_availability', 'xt', 'directory')
-
     if args.all_objects:
-        objs = db.query({'xt': ANY}, fields)
+        scanner.run_batch(db.query({'xt': ANY}, scanner.fields))
+        scanner.log.info("Scanned %d assets. %d available, totaling %d GB",
+                         scanner.processed, scanner.available, scanner.size / (1024 * 1024 * 1024))
     else:
-        objs = db.query_keyed({
-            'xt': ANY,
-            'bh_availability': TimedBefore(t),
-        }, '+bh_availability', fields=fields, sortmeth=Sorting.timestamp)
-        objs = pick_and_shuffle(objs)
-    scanner.run(objs, t, force=args.all_objects)
-
-    log.info("Scanned %d assets. %d available, totaling %d GB",
-             scanner.processed, scanner.available, scanner.size / (1024 * 1024 * 1024))
+        scanner.run()
