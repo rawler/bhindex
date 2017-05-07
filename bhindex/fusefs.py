@@ -13,9 +13,13 @@ import logging
 import stat
 
 from time import time
+from threading import Thread
 
-from bithorde import Client, parseConfig, message
+from .scanner import Scanner
 from .tree import Filesystem, NotFoundError
+from .util import set_new_availability
+from bithorde import Client, parseConfig, message
+from distdb import DB
 
 import fusell
 
@@ -233,7 +237,15 @@ class Operations(fusell.Filesystem):
         fh = fh_pool.get()
         asset = self.bithorde.open(inode.ids())
         status = asset.status()
-        assert status and status.status == message.SUCCESS
+        status_ok = status and status.status == message.SUCCESS
+
+        if not status_ok:
+            db = self.fs.db
+            with db.transaction() as tr:
+                set_new_availability(inode.f.obj, status_ok)
+                tr.update(inode.f.obj)
+            raise(fusell.FUSEError(errno.ENOENT))
+
         self.files[fh] = asset
         return fh
 
@@ -260,6 +272,13 @@ class Operations(fusell.Filesystem):
         return stat
 
 
+def background_scan(args, config):
+    bithorde = Client(parseConfig(config.items('BITHORDE')), autoconnect=False)
+    bithorde.connect()
+
+    Scanner(DB(args.db), bithorde).run()
+
+
 def init_logging():
     logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(asctime)-15s <%(name)s> %(message)s")
 
@@ -267,6 +286,8 @@ def init_logging():
 def prepare_args(parser, config):
     parser.add_argument("--fs-debug", action="store_true", default=False,
                         help="Enable FS-debugging")
+    parser.add_argument("--no-scan", dest="scan", action="store_false", default=True,
+                        help="Don't run local scanner, rely on remote")
     parser.add_argument("mountpoint", help="Directory to mount the file under, I.E. 'dir/file'")
     parser.set_defaults(main=main)
 
@@ -286,6 +307,11 @@ def main(args, config, db):
     fsopts = ['nonempty', 'allow_other', 'max_read=131072', 'ro', 'fsname=bhindex']
     if args.fs_debug:
         fsopts.append('debug')
+
+    if args.scan:
+        t = Thread(target=background_scan, args=(args, config))
+        t.setDaemon(True)
+        t.start()
 
     try:
         fs = Operations(database=db, bithorde=bithorde)
