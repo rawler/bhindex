@@ -300,15 +300,18 @@ def _copy_value(x):
 
 
 @contextmanager
+def _guard(fn):
+    yield
+    fn()
+
 def _transient_directory(dir):
     existed = path.exists(dir)
     if not existed:
         os.mkdir(dir)
-    try:
-        yield
-    finally:
+    def cleanup():
         if not existed:
             os.rmdir(self._dir)
+    return _guard(cleanup)
 
 
 class FUSELL(object):
@@ -318,23 +321,30 @@ class FUSELL(object):
         self.fuse_options = fuse_options
         self.parallel = parallel
 
-    def run(self):
         args = ['fuse']
         for opt in self.fuse_options:
             args += ['-o', opt]
-        argv = fuse_args(len(args), (c_char_p * len(args))(*args), 0)
+        self.argv = fuse_args(len(args), (c_char_p * len(args))(*args), 0)
+        self.chan = None
 
+    def mount(self):
+        dir_cleanup = _transient_directory(self.mountpoint)
+
+        def cleanup():
+            with dir_cleanup:
+                libfuse.fuse_unmount(self.mountpoint, self.chan)
+                self.chan = None
+
+        self.chan = libfuse.fuse_mount(self.mountpoint, self.argv)
+        return _guard(cleanup)
+
+    def run(self):
+        assert self.chan
         pool = Pool(size=self.parallel)
-
-        with _transient_directory(self.mountpoint):
-            chan = libfuse.fuse_mount(self.mountpoint, argv)
-            assert chan
-
-            try:
-                self._fuse_run_session(argv, chan, pool)
-            finally:
-                libfuse.fuse_unmount(self.mountpoint, chan)
-                pool.waitall()
+        try:
+            self._fuse_run_session(pool)
+        finally:
+            pool.waitall()
 
     def _dispatcher(self, pool, method):
         def _handler(req, *args):
@@ -349,7 +359,7 @@ class FUSELL(object):
             pool.spawn(_handler, req, *args)
         return _dispatch
 
-    def _fuse_run_session(self, argv, chan, pool):
+    def _fuse_run_session(self, pool):
         fuse_ops = fuse_lowlevel_ops()
 
         for name, prototype in fuse_lowlevel_ops._fields_:
@@ -361,9 +371,10 @@ class FUSELL(object):
                 else:
                     setattr(fuse_ops, name, prototype(method))
 
-        session = libfuse.fuse_lowlevel_new(argv, byref(fuse_ops), sizeof(fuse_ops), None)
+        session = libfuse.fuse_lowlevel_new(self.argv, byref(fuse_ops), sizeof(fuse_ops), None)
         assert session
         try:
+            chan = self.chan
             libfuse.fuse_session_add_chan(session, chan)
             try:
                 fd = libfuse.fuse_chan_fd(chan)

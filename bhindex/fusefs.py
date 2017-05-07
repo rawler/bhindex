@@ -279,43 +279,39 @@ def background_scan(args, config):
     Scanner(DB(args.db), bithorde).run()
 
 
-def init_logging():
-    logging.basicConfig(level=logging.INFO, format="%(levelname)-8s %(asctime)-15s <%(name)s> %(message)s")
-
-
 def prepare_args(parser, config):
     parser.add_argument("--fs-debug", action="store_true", default=False,
                         help="Enable FS-debugging")
     parser.add_argument("--no-scan", dest="scan", action="store_false", default=True,
                         help="Don't run local scanner, rely on remote")
     parser.add_argument("mountpoint", help="Directory to mount the file under, I.E. 'dir/file'")
-    parser.set_defaults(main=main)
+    parser.set_defaults(main=main, setup=setup)
 
 
-def main(args, config, db):
-    init_logging()
-
-    mountpoint = args.mountpoint
-
+def setup(args, config, db):
     bithorde = Client(parseConfig(config.items('BITHORDE')), autoconnect=False)
     bithorde.connect()
-
-    if not os.path.exists(mountpoint):
-        os.mkdir(mountpoint)
-        atexit.register(lambda: os.rmdir(mountpoint))
 
     fsopts = ['nonempty', 'allow_other', 'max_read=131072', 'ro', 'fsname=bhindex']
     if args.fs_debug:
         fsopts.append('debug')
+    ops = Operations(database=db, bithorde=bithorde)
+    fs = fusell.FUSELL(ops, args.mountpoint, fsopts)
 
     if args.scan:
-        t = Thread(target=background_scan, args=(args, config))
-        t.setDaemon(True)
-        t.start()
+        scanner = Thread(target=background_scan, args=(args, config))
+        scanner.setDaemon(True)
+    else:
+        scanner = None
+
+    return fs.mount(), (fs, scanner)
+
+
+def main(fs, scanner):
+    if scanner:
+        scanner.start()
 
     try:
-        fs = Operations(database=db, bithorde=bithorde)
-
-        fusell.FUSELL(fs, mountpoint, fsopts).run()
+        fs.run()
     except Exception:
         log.exception("Error!")

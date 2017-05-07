@@ -1,5 +1,11 @@
+from contextlib import contextmanager
 import logging
 from . import add, cat, config, fusefs, links, scanner, syncer, tree, vacuum
+
+
+@contextmanager
+def noop_context_manager():
+    yield
 
 
 def main(args=None):
@@ -18,6 +24,7 @@ def main(args=None):
     CLI.add_argument('--setuid', dest="suid", help="Set username before running")
     CLI.add_argument('--verbose', '-v', action="store_true",
                      help="write debug-level output")
+    CLI.set_defaults(setup=lambda args, cfg, db: (noop_context_manager(), (args, cfg, db)))
     subparsers = CLI.add_subparsers(title="Sub-commands")
 
     Add = subparsers.add_parser('add', help='Add files to BitHorde and BHIndex')
@@ -57,11 +64,13 @@ def main(args=None):
 
         db = DB(args.db)
 
+        ctx, main_args = args.setup(args, cfg, db)
         if args.suid:
             from pwd import getpwnam
             from os import setuid
             setuid(getpwnam(args.suid).pw_uid)
 
-        args.main(args, cfg, db)
+        with ctx:
+            args.main(*main_args)
     except ArgumentError, e:
         CLI.error(e)
