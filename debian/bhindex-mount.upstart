@@ -1,0 +1,10 @@
+
+start on (filesystem and net-device-up IFACE!=lo)
+
+console log
+
+exec /usr/bin/bhindex --setuid nobody mount /media/bhindex
+post-stop exec /bin/umount -fl /media/bhindex
+
+respawn
+respawn limit 5 60

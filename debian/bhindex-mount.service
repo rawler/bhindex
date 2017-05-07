@@ -1,0 +1,12 @@
+[Unit]
+Description=BHIndex FUSE Mount
+Wants=network.target
+
+[Service]
+ExecStart=/usr/bin/bhindex --setuid nobody mount /media/bhindex
+ExecStopPost=/bin/umount -fl /media/bhindex
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
