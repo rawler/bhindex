@@ -273,10 +273,14 @@ class Operations(fusell.Filesystem):
 
 
 def background_scan(args, config):
-    bithorde = Client(parseConfig(config.items('BITHORDE')), autoconnect=False)
-    bithorde.connect()
+    while True:
+        try:
+            bithorde = Client(parseConfig(config.items('BITHORDE')), autoconnect=False)
+            bithorde.connect()
 
-    Scanner(DB(args.db), bithorde).run()
+            Scanner(DB(args.db), bithorde).run()
+        except Exception:
+            log.exception("Error in scanner")
 
 
 def prepare_args(parser, config):
@@ -314,4 +318,4 @@ def main(fs, scanner):
     try:
         fs.run()
     except Exception:
-        log.exception("Error!")
+        log.exception("Error in FuseFS")
