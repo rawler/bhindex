@@ -304,13 +304,16 @@ def _guard(fn):
     yield
     fn()
 
+
 def _transient_directory(dir):
     existed = path.exists(dir)
     if not existed:
         os.mkdir(dir)
-    def cleanup():
-        if not existed:
-            os.rmdir(self._dir)
+
+
+def cleanup():
+    if not existed:
+        os.rmdir(self._dir)
     return _guard(cleanup)
 
 
@@ -490,6 +493,14 @@ class FUSELL(object):
         contents = self.filesystem.readlink(ino)
         return self.reply_readlink(req, contents)
 
+    def fuse_mkdir(self, req, parent, name, mode):
+        entry = self.filesystem.mkdir(parent, name)
+        return self.reply_entry(req, entry)
+
+    def fuse_rename(self, req, parent, name, newparent, newname):
+        self.filesystem.rename(parent, name, newparent, newname)
+        return self.reply_err(req, 0)
+
     def fuse_fsyncdir(self, req, ino, datasync, fi):
         self.filesystem.fsyncdir(req, ino, datasync, fi)
 
@@ -550,7 +561,7 @@ class Filesystem:
             c_stat()
             FUSEError
         """
-        raise FUSEError(EROFS)
+        raise FUSEError(ENOSYS)
 
     def readlink(self, req, ino):
         """Read symbolic link
@@ -568,7 +579,7 @@ class Filesystem:
             fuse_entry_param()
             FUSEError
         """
-        raise FUSEError(EROFS)
+        raise FUSEError(ENOSYS)
 
     def mkdir(self, req, parent, name, mode):
         """Create a directory
@@ -577,7 +588,7 @@ class Filesystem:
             fuse_entry_param()
             FUSEError
         """
-        raise FUSEError(EROFS)
+        raise FUSEError(ENOSYS)
 
     def unlink(self, req, parent, name):
         """Remove a file
@@ -585,7 +596,7 @@ class Filesystem:
         Valid replies:
             FUSEError
         """
-        raise FUSEError(EROFS)
+        raise FUSEError(ENOSYS)
 
     def rmdir(self, req, parent, name):
         """Remove a directory
@@ -593,7 +604,7 @@ class Filesystem:
         Valid replies:
             FUSEError
         """
-        raise FUSEError(EROFS)
+        raise FUSEError(ENOSYS)
 
     def symlink(self, req, link, parent, name):
         """Create a symbolic link
@@ -602,7 +613,7 @@ class Filesystem:
             fuse_entry_param()
             FUSEError
         """
-        raise FUSEError(EROFS)
+        raise FUSEError(ENOSYS)
 
     def rename(self, req, parent, name, newparent, newname):
         """Rename a file
@@ -610,7 +621,7 @@ class Filesystem:
         Valid replies:
             FUSEError
         """
-        raise FUSEError(EROFS)
+        raise FUSEError(ENOSYS)
 
     def link(self, req, ino, newparent, newname):
         """Create a hard link
@@ -619,7 +630,7 @@ class Filesystem:
             fuse_entry_param()
             FUSEError
         """
-        raise FUSEError(EROFS)
+        raise FUSEError(ENOSYS)
 
     def open(self, req, ino, flags):
         """Open a file
@@ -646,7 +657,7 @@ class Filesystem:
             int(), written
             FUSEError
         """
-        raise FUSEError(EROFS)
+        raise FUSEError(ENOSYS)
 
     def flush(self, req, ino, fi):
         """Flush method

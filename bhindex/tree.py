@@ -5,7 +5,7 @@ from warnings import warn
 
 from distdb import Object, Starts, Sorting
 from .bithorde import Identifiers
-from .util import hasValidStatus
+from .util import hasValidStatus, set_new_availability, updateFolderAvailability
 log = getLogger('tree')
 
 
@@ -117,10 +117,11 @@ class Directory(Node):
     def mkdir(self, name, t=None, tr=None):
         try:
             return self[name]
-        except:
+        except LookupError:
             directory_attr = u'%s/%s' % (self.objs[0].id, name)
             new = Object.new('dir')
             new.set('directory', directory_attr, t=t)
+            set_new_availability(new, True)
             with tr or Filesystem.db_transaction(self.db) as tr:
                 tr.update(new)
             return Directory(self, (new,))
@@ -136,6 +137,7 @@ class Directory(Node):
                 obj.set('directory', dir | {directory_attr}, t=t)
             with tr or Filesystem.db_transaction(self.db) as tr:
                 tr.update(obj)
+                updateFolderAvailability(tr, obj, t=t)
 
     def rm(self, name, t=None, tr=None):
         try:
@@ -261,19 +263,37 @@ class Filesystem(object):
                 dir = dir.mkdir(segment, t=t, tr=tr)
         return dir
 
+    def _dir_name(self, x, lookup=None):
+        lookup = lookup or self.lookup
+        if isinstance(x, Path):
+            return lookup(x[:-1]), x[-1]
+        elif isinstance(x, tuple):
+            dir, name = x
+            if not isinstance(dir, Directory):
+                dir = lookup(dir)
+            return dir, name
+        else:
+            raise TypeError
+
     def mv(self, src, dst, t=None, tr=None):
         try:
             self.lookup(dst)
             raise FoundError("%s already exist")
         except NotFoundError:
             pass
-        src_dir = self.lookup(src[:-1])
-        target = src_dir[src[-1]]
+        if t is None:
+            t = time()
+
+        src_dir, src_name = self._dir_name(src)
+        subject = src_dir[src_name]
 
         with tr or self.transaction() as tr:
-            dst_dir = self.mkdir(dst[:-1], t=t, tr=tr)
-            dst_dir.link(dst[-1], target, t=t, tr=tr)
-            src_dir.rm(src[-1], t=t, tr=tr)
+            def mkdir(x):
+                return self.mkdir(x, t=t, tr=tr)
+            dst_dir, dst_name = self._dir_name(dst, lookup=mkdir)
+
+            dst_dir.link(dst_name, subject, t=t, tr=tr)
+            src_dir.rm(src_name, t=t, tr=tr)
 
 
 def prepare_ls_args(parser, config):

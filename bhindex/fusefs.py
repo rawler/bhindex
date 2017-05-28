@@ -2,7 +2,6 @@
 
 from __future__ import division, print_function, absolute_import
 
-import atexit
 import os
 import sys
 import warnings
@@ -16,7 +15,7 @@ from time import time
 from threading import Thread
 
 from .scanner import Scanner
-from .tree import Filesystem, NotFoundError
+from .tree import Filesystem, FoundError, NotFoundError
 from .util import set_new_availability
 from bithorde import Client, parseConfig, message
 from distdb import DB
@@ -179,10 +178,14 @@ class Directory(INode):
         for name, f in iter:
             yield name, INode.map(f), id
 
+    def mkdir(self, name):
+        return Directory(self.d.mkdir(name))
+
 
 class Operations(fusell.Filesystem):
     def __init__(self, bithorde, database):
-        self.root = Directory(Filesystem(database).root())
+        self.fs = Filesystem(database)
+        self.root = Directory(self.fs.root())
 
         self.inodes = {
             fusell.ROOT_INODE: self.root
@@ -209,7 +212,7 @@ class Operations(fusell.Filesystem):
         # Assuming the kernel only notifies when nlookup really reaches 0
         try:
             del self.inodes[ino]
-        except:
+        except KeyError:
             warnings.warn('Tried to forget something already missing.')
 
     def getattr(self, inode):
@@ -260,7 +263,7 @@ class Operations(fusell.Filesystem):
     def release(self, fh):
         try:
             del self.files[fh]
-        except:
+        except KeyError:
             warnings.warn("Trying to release unknown file handle: %s" % fh)
 
     def statfs(self):
@@ -270,6 +273,26 @@ class Operations(fusell.Filesystem):
         stat.f_blocks = stat.f_bfree = stat.f_bavail = 0
         stat.f_files = stat.f_ffree = stat.f_favail = 0
         return stat
+
+    def mkdir(self, parent, name):
+        parent = self._inode_resolve(parent, Directory)
+        try:
+            return parent.mkdir(name).entry()
+        except FoundError:
+            raise(fusell.FUSEError(errno.EEXIST))
+        except NotFoundError:
+            raise(fusell.FUSEError(errno.ENOENT))
+
+    def rename(self, parent, name, newparent, newname):
+        parent = self._inode_resolve(parent, Directory)
+        newparent = self._inode_resolve(newparent, Directory)
+
+        try:
+            self.fs.mv((parent.d, name), (newparent.d, newname))
+        except FoundError:
+            raise(fusell.FUSEError(errno.EEXIST))
+        except NotFoundError:
+            raise(fusell.FUSEError(errno.ENOENT))
 
 
 def background_scan(args, config):
@@ -296,7 +319,7 @@ def setup(args, config, db):
     bithorde = Client(parseConfig(config.items('BITHORDE')), autoconnect=False)
     bithorde.connect()
 
-    fsopts = ['nonempty', 'allow_other', 'max_read=131072', 'ro', 'fsname=bhindex']
+    fsopts = ['nonempty', 'allow_other', 'max_read=131072', 'fsname=bhindex']
     if args.fs_debug:
         fsopts.append('debug')
     ops = Operations(database=db, bithorde=bithorde)
