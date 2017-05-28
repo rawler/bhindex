@@ -9,7 +9,7 @@ from warnings import warn
 
 import concurrent
 from bithorde import parseHashIds, message
-from distdb import Transaction
+from distdb import AsyncCommitter
 
 if getattr(sys.stdout, 'encoding', 'UNDEFINED') is None:
     sys.stdout = codecs.getwriter('utf8')(sys.stdout)
@@ -196,13 +196,25 @@ def calc_new_availability(status_ok, avail):
         return new_availability, CHANGE_WAIT_VALUE
 
 
-def updateFolderAvailability(transaction, item, t):
+def set_new_availability(obj, status_ok, now=None):
+    if now is None:
+        now = time()
+
+    avail, _ = _object_availability(obj)
+    newAvail, valid_for = calc_new_availability(status_ok, avail)
+
+    del obj['bh_status']
+    del obj['bh_status_confirmed']
+    obj.set('bh_availability', unicode(newAvail), t=now + valid_for)
+
+
+def updateFolderAvailability(committer, item, t):
     for dir_mapping in item.get(u'directory', []):
         dir_mapping = dir_mapping.split('/', 1)
         if not len(dir_mapping) == 2:
             continue
         (dir_id, _) = dir_mapping
-        directory = transaction.db.get(dir_id)
+        directory = committer.db.get(dir_id)
 
         if directory.empty():
             continue
@@ -210,8 +222,8 @@ def updateFolderAvailability(transaction, item, t):
         objAvail = directory.getitem(u'bh_availability', None)
         if objAvail is None or t > objAvail.t:
             directory.set('bh_availability', unicode(AVAILABILITY_BASE_CHANGE), t=t)
-            transaction.update(directory)
-            updateFolderAvailability(transaction, directory, t)
+            committer.update(directory)
+            updateFolderAvailability(committer, directory, t)
 
 
 def _checkAsset(bithorde, obj, now):
@@ -222,12 +234,8 @@ def _checkAsset(bithorde, obj, now):
     with bithorde.open(ids) as bhAsset:
         status = bhAsset.status()
         status_ok = status and status.status == message.SUCCESS or False
-    avail, _ = _object_availability(obj)
-    newAvail, valid_for = calc_new_availability(status_ok, avail)
 
-    del obj['bh_status']
-    del obj['bh_status_confirmed']
-    obj.set('bh_availability', unicode(newAvail), t=now + valid_for)
+    set_new_availability(obj, status_ok, now=now)
 
     if status and (status.size is not None):
         if status.size > 2**40:
@@ -247,7 +255,7 @@ def _cachedCheckAsset(bithorde, obj, now, required_validity):
         return obj, dbStatus
 
 
-def _scan_assets(bithorde, objs, transaction, checker):
+def _scan_assets(bithorde, objs, committer, checker):
     assetsChecked = Counter()
     cacheUse = Counter()
     available = Counter()
@@ -257,13 +265,12 @@ def _scan_assets(bithorde, objs, transaction, checker):
         assetsChecked.inc()
 
         if obj.dirty():
-            if transaction:
+            if committer:
                 new_avail = obj.getitem('bh_availability')
                 if float(new_avail.any(0)) > 0:
-                    updateFolderAvailability(transaction, obj, new_avail.t)
+                    updateFolderAvailability(committer, obj, new_avail.t)
 
-                transaction.update(obj)
-                transaction.yield_from(2)
+                committer.update(obj)
         else:
             cacheUse.inc()
 
@@ -297,8 +304,8 @@ def cachedAssetLiveChecker(bithorde, objs, db=None, force=False, required_validi
             return _cachedCheckAsset(bithorde, obj, now, required_validity)
 
     if db:
-        with db.transaction(Transaction.IMMEDIATE) as transaction:
-            for x in _scan_assets(bithorde, objs, transaction, checker):
+        with AsyncCommitter(db) as committer:
+            for x in _scan_assets(bithorde, objs, committer, checker):
                 yield x
     else:
         for x in _scan_assets(bithorde, objs, None, checker):

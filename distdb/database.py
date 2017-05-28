@@ -1,6 +1,7 @@
 import inspect
 import sqlite3
 from time import time
+from threading import Event, Thread
 
 import concurrent
 
@@ -122,12 +123,12 @@ class Transaction(object):
     EXCLUSIVE = "EXCLUSIVE"
     ACTIVE = set([IMMEDIATE, EXCLUSIVE])
 
-    def __init__(self, db, type):
+    def __init__(self, db, mode):
         self.db = db
         self.conn = db.conn
         self.lock = db.lock
-        self.type = type
-        self.reserved = type in self.ACTIVE
+        self.mode = mode
+        self.reserved = mode in self.ACTIVE
         self.created = inspect.getouterframes(inspect.currentframe(), 2)[1:]
         self.count = 0
 
@@ -137,7 +138,7 @@ class Transaction(object):
             if self.count > 1:
                 self.conn.execute('SAVEPOINT s%d' % self.count)
             else:
-                self.conn.execute('BEGIN %s TRANSACTION' % self.type)
+                self.conn.execute('BEGIN %s TRANSACTION' % self.mode)
                 self.db.in_transaction = self
 
     def __enter__(self):
@@ -177,11 +178,6 @@ class Transaction(object):
             return
         self._commit()
         self._begin()
-
-    def take_write(self):
-        with self.lock:
-            self.conn.execute("PRAGMA user_version=0")
-            self.reserved = True
 
     def _insert_list(self, values):
         if not values:
@@ -243,11 +239,51 @@ class Transaction(object):
                             SELECT objid, keyid, ?, NULL FROM map WHERE objid = ?""", (t, objid))
 
 
+class AsyncCommitter(Thread):
+    def __init__(self, db, min_interval=0.5):
+        super(AsyncCommitter, self).__init__(name="AsyncCommitter")
+        self.daemon = True
+        self.db = db
+        self._db = db.clone()
+        self._min_interval = min_interval
+        self._pending = list()
+
+    def __enter__(self):
+        self._stop = Event()
+        self.start()
+        return self
+
+    def __exit__(self, type, exc, tb):
+        self._stop.set()
+        self.join()
+
+    def run(self):
+        next_commit = 0
+        stopped = False
+        while not stopped:
+            stopped = self._stop.wait(next_commit - time())
+            next_commit = time() + self._min_interval
+
+            pending, self._pending = self._pending, list()
+            self._flush(pending)
+
+    def _flush(self, objs):
+        if not objs:
+            return
+        with Transaction(self._db, Transaction.IMMEDIATE) as t:
+            for obj in objs:
+                t.update(obj)
+
+    def update(self, obj):
+        self._pending.append(obj)
+
+
 class DB(object):
     ANY = ANY
     Starts = Starts
 
     def __init__(self, path):
+        self.path = path
         self.conn = sqlite3.connect(
             path, timeout=60, isolation_level=None, check_same_thread=False)
         self.cursor = self.conn.cursor()
@@ -255,6 +291,9 @@ class DB(object):
         self.__keyCache = dict()
         self.lock = concurrent.ThreadLock()
         self.in_transaction = None
+
+    def clone(self):
+        return type(self)(self.path)
 
     def set_volatile(self, v):
         sync = v and 'OFF' or 'NORMAL'
@@ -276,7 +315,7 @@ class DB(object):
 
     def _query_first(self, query, args):
         with self.lock:
-            c = self.cursor
+            c = self.conn.cursor()
             c.execute(query, args)
             return c.fetchone()
 
