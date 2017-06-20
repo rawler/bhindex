@@ -45,11 +45,11 @@ def _sql_condition(k, v):
     timed_before_query = """SELECT DISTINCT objid FROM map
                      NATURAL JOIN key
                      WHERE key = ? AND listid IS NOT NULL AND timestamp < ?"""
-    absent_query = """SELECT DISTINCT objid FROM obj
-                        WHERE NOT EXISTS (
+    absent_query = """SELECT DISTINCT objid FROM map AS ref
+                        WHERE listid IS NOT NULL AND NOT EXISTS (
                           SELECT 1 FROM map
                             NATURAL JOIN key
-                            WHERE obj.objid = map.objid AND key = ? AND listid IS NOT NULL
+                            WHERE ref.objid = map.objid AND key = ? AND listid IS NOT NULL
                         )"""
     if v is ANY:
         return (any_query, (k,))
