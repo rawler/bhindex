@@ -15,7 +15,7 @@ from distdb import ANY, Sorting, TimedBefore
 SAFETY = 60
 FUDGE = 30
 MAX_BATCH = 1000
-MIN_SLEEP = 0.0001
+MIN_SLEEP = 5
 
 
 class Scanner(object):
@@ -56,6 +56,8 @@ class Scanner(object):
             if batch:
                 sleep(max(batch[0][0] - limit, MIN_SLEEP))
                 self.run_batch((self.db[id] for _, id in batch))
+            else:
+                sleep(MIN_SLEEP)
 
     def run_batch(self, objs):
         self.available = 0
