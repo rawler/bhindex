@@ -35,21 +35,21 @@ def _sql_query_starts(k, v):
 
 # Generate an SQL condition that finds object with matching criteria
 def _sql_condition(k, v):
-    equal_query = """SELECT DISTINCT objid FROM map
+    equal_query = """SELECT objid FROM map
                        NATURAL JOIN list
                        NATURAL JOIN key
-                       WHERE key = ? AND list.value = ?"""
-    any_query = """SELECT DISTINCT objid FROM map
+                       WHERE LIKELIHOOD(key = ?, 0.9375) AND UNLIKELY(list.value = ?)"""
+    any_query = """SELECT objid FROM map
                      NATURAL JOIN key
-                     WHERE key = ? AND listid IS NOT NULL"""
-    timed_before_query = """SELECT DISTINCT objid FROM map
+                     WHERE key = ? AND listid NOT NULL"""
+    timed_before_query = """SELECT objid FROM map
                      NATURAL JOIN key
-                     WHERE key = ? AND listid IS NOT NULL AND timestamp < ?"""
+                     WHERE LIKELIHOOD(key = ?, 0.9375) AND listid IS NOT NULL AND timestamp < ?"""
     absent_query = """SELECT DISTINCT objid FROM map AS ref
-                        WHERE listid IS NOT NULL AND NOT EXISTS (
+                        WHERE LIKELIHOOD(listid NOT NULL, 0.9375) AND NOT EXISTS (
                           SELECT 1 FROM map
                             NATURAL JOIN key
-                            WHERE ref.objid = map.objid AND key = ? AND listid IS NOT NULL
+                            WHERE ref.objid = map.objid AND key = ? AND LIKELIHOOD(listid NOT NULL, 0.9375)
                         )"""
     if v is ANY:
         return (any_query, (k,))
