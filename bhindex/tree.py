@@ -184,6 +184,7 @@ class Split(Directory):
             name = self._entry(obj.id)
             if name == key:
                 return self._map((obj,), key)
+        raise NotFoundError("%s not found in %s" % (key, [x.id for x in self.objs]))
 
     def rm(self, name, t=None, tr=None):
         purge_list = set("%s/%s" % (obj.id, self._conflictname) for obj in self._dir.objs)
