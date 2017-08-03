@@ -51,7 +51,7 @@ class SyncConnection(object):
         self._sendmsg(['hello', sync_pb2.Hello(name=self.name)])
         peerhello = self.read_msg(timeout=HANDSHAKE_TIMEOUT)
         if not peerhello:
-            raise StopIteration
+            return
         self.peername = peerhello.name
         with self.db.transaction():
             self._last_serial_received = self.db.get_sync_state(self.peername)['last_received']
@@ -64,7 +64,7 @@ class SyncConnection(object):
 
         peersetup = self.read_msg(timeout=HANDSHAKE_TIMEOUT)
         if not peersetup:
-            raise StopIteration
+            return
         with self.db.transaction():
             if peersetup.last_serial_received <= self.db.last_serial():
                 self._last_serial_sent = peersetup.last_serial_received
@@ -218,14 +218,14 @@ class KeyHolder(object):
     def __exit__(self, exc_type, exc_value, traceback):
         for key in self.keys:
             try:
-                self.dict.pop(key)
+                del self.dict[key]
             except KeyError:
                 pass
 
     def set_key(self, key, value):
         self.keys.add(key)
         if key in self.dict:
-            return None   # Slow was already occupied
+            return None   # Slot was already occupied
         else:
             self.dict[key] = value
             return value  # Slot was empty, we set a new key
@@ -265,7 +265,13 @@ class P2P(object):
             for address, sock in connectPool.imap(_connect, addresses):
                 if sock:
                     self._connectAddresses[address] = False
-                    concurrent.spawn(self._connectionWrapper, sock, address, address)
+                    def run():
+                        try:
+                            self._connectionWrapper(sock, address, address)
+                        finally:
+                            if not self._connectAddresses[address]:
+                                self._connectAddresses[address] = True
+                    concurrent.spawn(run)
             concurrent.sleep(self.connect_interval)
 
     def _connectionWrapper(self, sock, client_address, connectAddress=None):
@@ -324,10 +330,9 @@ class Syncer(P2P):
         with SyncConnection(self._db, self.name, sock, self.uuid) as conn:
             try:
                 logging.debug("Handshaking with remote address %s", peer)
-                conn.handshake()
-            except StopIteration:
-                logging.debug("Handshake ended prematurely with %s", peer)
-                return
+                if not conn.handshake():
+                    logging.debug("Handshake ended prematurely with %s", peer)
+                    return
             except Exception:
                 logging.exception("Handshake failed with %s", peer)
                 return
@@ -342,8 +347,8 @@ class Syncer(P2P):
                 conn.run()
             except Exception:
                 logging.exception("%s died", peername)
-
-            logging.info('%s disconnected from %s', conn.peername, peer)
+            else:
+                logging.info('%s disconnected from %s', conn.peername, peer)
 
     def _db_push(self, db_poll_interval):
         while self.running:

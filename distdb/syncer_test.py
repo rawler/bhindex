@@ -1,5 +1,6 @@
 from nose.tools import *
 from time import time
+from mock import patch
 
 from distdb.serialize import *
 from distdb.syncer import *
@@ -77,18 +78,18 @@ class TestSyncConnection():
         assert_is(res1, self.syncer1)
         assert_is(res2, self.syncer2)
 
+    @patch('distdb.syncer.HANDSHAKE_TIMEOUT', 0.1)
     def test_handshake_timeout(self):
         c1, c2 = socket_pair()
-        syncer.HANDSHAKE_TIMEOUT = 0.2
         self.syncer1 = SyncConnection(self.db1, 'syncer1', c1, None)
-        assert_raises(StopIteration, self.syncer1.handshake)
+        assert_is_none(self.syncer1.handshake())
 
+    @patch('distdb.syncer.HANDSHAKE_TIMEOUT', 0.1)
     def test_handshake_timeout2(self):
         c1, c2 = socket_pair()
-        syncer.HANDSHAKE_TIMEOUT = 0.2
         self.syncer1 = SyncConnection(self.db1, 'syncer1', c1, None)
         MESSAGE_ENCODER(c2.send)('hello', sync_pb2.Hello(name="apa"))
-        assert_raises(StopIteration, self.syncer1.handshake)
+        assert_is_none(self.syncer1.handshake())
 
     def test_context_manager(self):
         assert_false(self.syncer1.closed())
@@ -335,8 +336,8 @@ class TestSyncServer():
         self.s.close()
         s.run()
 
+    @patch('distdb.syncer.HANDSHAKE_TIMEOUT', 0.1)
     def test_handshake_timeout(self):
         s = self.connect()
-        syncer.HANDSHAKE_TIMEOUT = 0.2
         assert_equal(s.read_msg(), sync_pb2.Hello(name="Syncer1"))
         assert_equal(s.read_msg(), None)
