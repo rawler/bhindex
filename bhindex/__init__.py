@@ -61,6 +61,7 @@ def main(args=None):
         else:
             lvl = logging.INFO
         logging.basicConfig(level=lvl, format="%(levelname)-8s %(asctime)-15s <%(name)s> %(message)s")
+        logging.getLogger().setLevel(lvl)
 
         db = DB(args.db)
 
