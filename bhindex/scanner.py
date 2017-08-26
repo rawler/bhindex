@@ -20,7 +20,6 @@ MIN_SLEEP = 5
 
 class Scanner(object):
     fields = ('bh_availability', 'xt', 'directory')
-    log = getLogger('scanner')
 
     def __init__(self, db, bithorde):
         self.db = db
@@ -28,6 +27,7 @@ class Scanner(object):
         self.available = 0
         self.processed = 0
         self.size = 0
+        self.log = getLogger('scanner')
 
     def pick_batch(self, expires_before, limit=MAX_BATCH):
         objs = chain(
@@ -40,7 +40,7 @@ class Scanner(object):
                     'xt': ANY,
                     'bh_availability': TimedBefore(expires_before),
                 }, '+bh_availability', fields=self.fields,
-                sortmeth=Sorting.timestamp))
+                sortmeth=Sorting.timestamp)),
         )
         return islice(objs, limit)
 
@@ -63,6 +63,7 @@ class Scanner(object):
         self.available = 0
         self.processed = 0
 
+        start = time()
         for obj, status_ok in cachedAssetLiveChecker(self.bithorde, objs, db=self.db, force=True):
             self.processed += 1
             if not status_ok:
@@ -75,6 +76,8 @@ class Scanner(object):
                     self.size += fsize
                 else:
                     warn("Asset with implausible size: %s" % obj)
+
+        self.log.debug("Processed %d assets in %d seconds", self.processed, time() - start)
 
 
 def prepare_args(parser, config):

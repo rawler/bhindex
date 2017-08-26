@@ -18,7 +18,7 @@ if getattr(sys.stderr, 'encoding', 'UNDEFINED') is None:
 
 AVAILABILITY_BASE_CHANGE = 600
 AVAILABILITY_ALTENATOR = 0.4
-UNCHANGED_WAIT_FACTOR = 0.1
+UNCHANGED_WAIT_FACTOR = 0.4
 CHANGE_WAIT_VALUE = 60
 
 statusLog = logging.getLogger('statusLog')
