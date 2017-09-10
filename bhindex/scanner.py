@@ -16,6 +16,7 @@ SAFETY = 60
 FUDGE = 30
 MAX_BATCH = 1000
 MIN_SLEEP = 5
+UNCHECKED_SCAN_INTERVAL = 360
 
 
 class Scanner(object):
@@ -28,20 +29,34 @@ class Scanner(object):
         self.processed = 0
         self.size = 0
         self.log = getLogger('scanner')
+        self.last_unchecked_scan = 0
+
+    def pick_stale(self, expires_before):
+        q = self.db.query_keyed({
+            'xt': ANY,
+            'bh_availability': TimedBefore(expires_before),
+        }, '+bh_availability', fields=self.fields,
+            sortmeth=Sorting.timestamp)
+        for _, obj in q:
+            yield obj.getitem('bh_availability').t, obj.id
+
+    def pick_unchecked(self):
+        q = self.db.query_ids({
+            'xt': ANY,
+            'bh_availability': None,
+        })
+        for id in q:
+            yield 0, id
 
     def pick_batch(self, expires_before, limit=MAX_BATCH):
-        objs = chain(
-            ((0, id) for id in self.db.query_ids({
-                'xt': ANY,
-                'bh_availability': None,
-            })),
-            ((obj.getitem('bh_availability').t, obj.id) for _, obj in
-                self.db.query_keyed({
-                    'xt': ANY,
-                    'bh_availability': TimedBefore(expires_before),
-                }, '+bh_availability', fields=self.fields,
-                sortmeth=Sorting.timestamp)),
-        )
+        objs = self.pick_stale(expires_before)
+
+        # pick_unchecked is slow, and unlikely to yield anything
+        # so only run it in big intervals
+        if self.last_unchecked_scan < expires_before - UNCHECKED_SCAN_INTERVAL:
+            objs = chain(self.pick_unchecked(), objs)
+            self.last_unchecked_scan = expires_before
+
         return islice(objs, limit)
 
     def _fudged_batch(self, expires_before, fudge=FUDGE):
