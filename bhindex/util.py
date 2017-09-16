@@ -227,7 +227,7 @@ def updateFolderAvailability(committer, item, t):
 
 
 def _checkAsset(bithorde, obj, now):
-    ids = parseHashIds(obj.get('xt', tuple()))
+    ids = parseHashIds(obj.get('xt') or obj.id)
     if not ids:
         return obj, None
 
