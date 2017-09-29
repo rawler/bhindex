@@ -5,110 +5,12 @@ from threading import Event, Thread
 
 import concurrent
 
-from obj import Object, TimedValues, ANY
+from obj import Object, TimedValues
+from query import Key as QueryKey, Condition, Query, Sort
 from _setup import create_DB
 
 # Pointers to empty list will be wiped after 30 days.
 DEFAULT_GRACE = 3600 * 24 * 30
-
-
-# Matcher-class to match a prefix of a value
-class Starts(tuple):
-    def __new__(cls, v):
-        if not hasattr(v, '__iter__'):
-            v = (v,)
-        return super(Starts, cls).__new__(cls, v)
-
-
-class TimedBefore(int):
-    pass
-
-
-def _sql_query_starts(k, v):
-    crit = ' OR '.join("value GLOB '%s*'" % x.replace("'", "''") for x in v)
-    query = """SELECT objid FROM map NATURAL JOIN list
-        WHERE keyid = ? AND (%s)""" % crit
-    return (query, (k,))
-
-
-def _sql_condition(k, v):
-    '''Generate an SQL condition that finds object with matching criteria'''
-    equal_query = """SELECT objid FROM map
-                       NATURAL JOIN list
-                       WHERE LIKELIHOOD(keyid = ?, 0.9375) AND UNLIKELY(list.value = ?)"""
-    any_query = """SELECT objid FROM map
-                     WHERE keyid = ? AND listid NOT NULL"""
-    timed_before_query = """SELECT objid FROM map
-                     WHERE LIKELIHOOD(keyid = ?, 0.9375) AND listid IS NOT NULL AND timestamp < ?"""
-    absent_query = """SELECT DISTINCT objid FROM map AS ref
-                        WHERE LIKELIHOOD(listid NOT NULL, 0.9375) AND NOT EXISTS (
-                          SELECT 1 FROM map
-                            WHERE ref.objid = map.objid AND keyid = ? AND LIKELIHOOD(listid NOT NULL, 0.9375)
-                        )"""
-    if v is ANY:
-        return (any_query, (k,))
-    elif v is None:
-        return (absent_query, (k,))
-    elif isinstance(v, Starts):
-        return _sql_query_starts(k, v)
-    elif isinstance(v, TimedBefore):
-        return (timed_before_query, (k, v))
-    else:
-        return (equal_query, (k, v))
-
-
-def _sql_for_query(crit, key_lookup):
-    sql = []
-    params = []
-    for k, v in crit.iteritems():
-        k = key_lookup(k)
-        sql_fragment, new_params = _sql_condition(k, v)
-        sql.append(sql_fragment)
-        params += new_params
-
-    return " INTERSECT ".join(sql), params
-
-
-def _parse_sort(sort):
-    direction, key = sort[:1], sort[1:]
-    if direction == '+':
-        return "ASC", key
-    elif direction == '-':
-        return "DESC", key
-    else:
-        raise ValueError("Direction specifier %s in sort=%s is not valid" % (direction, sort))
-
-
-def _sql_for_keyed_query(crit, key, offset, sortmeth, key_lookup):
-    direction, key = _parse_sort(key)
-    selection, params = _sql_for_query(crit, key_lookup)
-    sort_key, sort_params = sortmeth()
-    if selection:
-        selection = "(%s) NATURAL JOIN map" % selection
-    else:
-        selection = "map"
-    selection = """SELECT DISTINCT objid, value FROM %s
-NATURAL JOIN list
-    WHERE keyid = %s ORDER BY %s %s, objid""" % (selection, key_lookup(key), sort_key, direction)
-
-    if offset:
-        selection = selection + (" LIMIT -1 OFFSET %d" % offset)
-
-    return selection, params + sort_params
-
-
-class Sorting:
-    @staticmethod
-    def default_sort():
-        return "value", []
-
-    @staticmethod
-    def split(character):
-        return lambda: ("substr(value, instr(value, ?))", [character])
-
-    @staticmethod
-    def timestamp():
-        return "timestamp", []
 
 
 class Transaction(object):
@@ -297,10 +199,40 @@ class Keys(dict):
         return self[id]
 
 
-class DB(object):
-    ANY = ANY
-    Starts = Starts
+def _parse_sort(sort):
+    direction, key = sort[:1], sort[1:]
+    if direction == '+':
+        return Sort.ASCENDING, key
+    elif direction == '-':
+        return Sort.DESCENDING, key
+    else:
+        raise ValueError("Direction specifier %s in sort=%s is not valid" % (direction, sort))
 
+
+class DBQuery(Query):
+    def __init__(self, db, keys):
+        self.db = db
+        super(DBQuery, self).__init__(keys)
+
+    def optimize_conditions(self, crit):
+        if isinstance(crit, QueryKey) and isinstance(crit.v, str):
+            crit.v = self.db.keys(crit.v)
+            return crit
+        if isinstance(crit, Condition):
+            conditions = [self.optimize_conditions(x) for x in crit]
+            return type(crit)(*conditions)
+        return crit
+
+    def apply(self):
+        self.criteria = self.optimize_conditions(self.criteria)
+        return super(DBQuery, self).apply()
+
+    def __iter__(self):
+        q, args = self.apply()
+        return iter(self.db._query_all(q, args))
+
+
+class DB(object):
     def __init__(self, path):
         self.path = path
         self.conn = sqlite3.connect(
@@ -329,7 +261,6 @@ class DB(object):
     def _query_all(self, query, args):
         with self.lock:
             c = self.conn.cursor()
-            print(query, args)
             c.execute(query, args)
             return c.fetchall()
 
@@ -379,25 +310,30 @@ class DB(object):
     def __getitem__(self, obj):
         return self.get(obj)
 
-    def query_ids(self, criteria):
-        query, params = _sql_for_query(criteria, self.keys)
-        query = "SELECT obj FROM obj NATURAL JOIN (%s)" % query
-        for objid, in self._query_all(query, params):
-            yield objid
-
-    def query_raw_ids(self, criteria):
-        query, params = _sql_for_query(criteria, self.keys)
-        for objid, in self._query_all(query, params):
-            yield objid
+    def _select(self, *columns):
+        return DBQuery(self, columns)
 
     def query(self, criteria, fields=None):
-        query, params = _sql_for_query(criteria, self.keys)
-        for objid, in self._query_all(query, params):
+        if isinstance(criteria, Condition):
+            criteria = (criteria,)
+        for objid, in self._select('objid').where(*criteria):
             yield self.get(objid, fields)
 
-    def query_keyed(self, criteria, key, offset=0, fields=None, sortmeth=Sorting.default_sort):
-        query, params = _sql_for_keyed_query(criteria, key, offset, sortmeth, self.keys)
-        for objid, key_value in self._query_all(query, params):
+    def query_ids(self, criteria, fields=None):
+        if isinstance(criteria, Condition):
+            criteria = (criteria,)
+        for objid, in self._select('objid').where(*criteria):
+            yield objid
+
+    def query_keyed(self, criteria, key, fields=None, sortmeth=Sort.value):
+        if isinstance(criteria, Condition):
+            criteria = (criteria,)
+        direction, key = _parse_sort(key)
+        key_crit = [c for c in criteria if c.requires_key(key)] or [QueryKey(key).any()]
+        other_crit = [c for c in criteria if not c.requires_key(key)]
+        for objid, key_value in self._select('objid', 'value') \
+                .where(*(key_crit + other_crit)) \
+                .order_by(sortmeth, direction):
             yield key_value, self.get(objid, fields)
 
     def _get_list_id(self, values):

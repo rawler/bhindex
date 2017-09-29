@@ -3,7 +3,7 @@ from os.path import normpath as osnormpath
 from time import time
 from warnings import warn
 
-from distdb import Object, Starts, Sorting
+from distdb import Object, Key, Sort
 from .bithorde import Identifiers
 from .util import hasValidStatus, set_new_availability, updateFolderAvailability
 log = getLogger('tree')
@@ -90,8 +90,8 @@ class Directory(Node):
     def _ls(self, t):
         dirids = set("%s" % dirobj.id for dirobj in self.objs)
         children = self.db.query_keyed(
-            {'directory': Starts("%s/" % d for d in dirids)}, key="+directory",
-            sortmeth=Sorting.split('/'), fields=('directory', 'xt', 'bh_availability'),
+            Key('directory').startswith("%s/" % d for d in dirids), key="+directory",
+            sortmeth=Sort.split('/'), fields=('directory', 'xt', 'bh_availability'),
         )
         for dirent, child in _filterAvailable(children, t):
             try:
@@ -108,7 +108,7 @@ class Directory(Node):
     def __getitem__(self, key):
         objs = list()
         for obj in self.objs:
-            objs += self.db.query({u'directory': "%s/%s" % (obj.id, key)})
+            objs += self.db.query(Key('directory') == "%s/%s" % (obj.id, key))
         if objs:
             return self._map(objs, key)
         else:

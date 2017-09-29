@@ -5,7 +5,7 @@ import os
 import os.path as path
 from time import time
 
-from distdb import ANY
+from distdb import Key, ObjId
 from bithorde import Client, parseConfig
 
 from .tree import Filesystem
@@ -103,9 +103,12 @@ class DBExporter(object):
         t = time()
         count = size = 0
 
-        crit = {'directory': ANY, 'xt': ANY}
+        crit = (
+            ObjId.startswith('tree:tiger:'),
+            Key('directory').any(),
+        )
         if not force_all:
-            crit['@linked'] = None
+            crit += (Key('@linked').missing(),)
         objs = self.db.query(crit)
         for obj, status_ok in cachedAssetLiveChecker(self.bithorde, objs, db=self.db):
             if not status_ok:

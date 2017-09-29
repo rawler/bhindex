@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from database import ANY, DB, Sorting, Starts, TimedBefore, Transaction, AsyncCommitter
+from database import DB, Transaction, AsyncCommitter
 from obj import Object
+from query import Key, ObjId, Sort
 
 open = DB
