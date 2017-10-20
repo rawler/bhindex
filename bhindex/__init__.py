@@ -1,5 +1,11 @@
+from contextlib import contextmanager
 import logging
-from . import add, cat, config, links, scanner, syncer, tree, vacuum
+from . import add, cat, config, fusefs, links, scanner, syncer, tree, vacuum
+
+
+@contextmanager
+def noop_context_manager():
+    yield
 
 
 def main(args=None):
@@ -18,6 +24,7 @@ def main(args=None):
     CLI.add_argument('--setuid', dest="suid", help="Set username before running")
     CLI.add_argument('--verbose', '-v', action="store_true",
                      help="write debug-level output")
+    CLI.set_defaults(setup=lambda args, cfg, db: (noop_context_manager(), (args, cfg, db)))
     subparsers = CLI.add_subparsers(title="Sub-commands")
 
     Add = subparsers.add_parser('add', help='Add files to BitHorde and BHIndex')
@@ -31,6 +38,9 @@ def main(args=None):
 
     LS = subparsers.add_parser('ls', help='List files in a directory of BHIndex')
     tree.prepare_ls_args(LS, cfg)
+
+    MOUNT = subparsers.add_parser('mount', help='Mount bhindex as a FUSE file system')
+    fusefs.prepare_args(MOUNT, cfg)
 
     MV = subparsers.add_parser('mv', help='Move a file or directory in the bithorde tree')
     tree.prepare_mv_args(MV, cfg)
@@ -51,14 +61,17 @@ def main(args=None):
         else:
             lvl = logging.INFO
         logging.basicConfig(level=lvl, format="%(levelname)-8s %(asctime)-15s <%(name)s> %(message)s")
+        logging.getLogger().setLevel(lvl)
 
         db = DB(args.db)
 
+        ctx, main_args = args.setup(args, cfg, db)
         if args.suid:
             from pwd import getpwnam
             from os import setuid
             setuid(getpwnam(args.suid).pw_uid)
 
-        args.main(args, cfg, db)
+        with ctx:
+            args.main(*main_args)
     except ArgumentError, e:
         CLI.error(e)

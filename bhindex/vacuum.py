@@ -2,7 +2,7 @@ from time import time
 import logging
 
 from bhindex.util import validAvailability, Counter
-from distdb import ANY
+from distdb import Key
 
 log = logging.getLogger("vacuum")
 
@@ -19,7 +19,7 @@ def wipe(config, db, availability):
     total = Counter()
     wiped = Counter()
     with db.transaction() as tr:
-        for obj in db.query({'bh_availability': ANY}):
+        for obj in db.query(Key('bh_availability').any()):
             total.inc()
             if (validAvailability(obj, t) or 0) < availability:
                 tr.delete(obj, t)

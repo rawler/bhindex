@@ -5,7 +5,8 @@ from time import time
 
 from nose.tools import *
 from distdb.obj import TimedValues, Set, Object
-from distdb.database import ANY, DB, Starts
+from distdb.database import DB
+from distdb.query import Key
 
 HOURS = 3600
 
@@ -87,11 +88,11 @@ class TestInRam():
         assert_in(u'name', self.db[self.o.id])
 
     def test_query(self):
-        assert_not_in(self.o, self.db.query({u'key': 'Not here'}))
-        assert_not_in(self.o, self.db.query({u'nokey': ANY}))
-        assert_in(self.o, list(self.db.query({u'key': u'Test Person'})))
-        assert_in(self.o, list(self.db.query({u'apa': None})))
-        assert_in(self.o, list(self.db.query({u'key': Starts('Test')})))
+        assert_not_in(self.o, self.db.query(Key('key') == 'Not here'))
+        assert_not_in(self.o, self.db.query(Key('nokey').any()))
+        assert_in(self.o, list(self.db.query(Key('key') == u'Test Person')))
+        assert_in(self.o, list(self.db.query(Key('apa').missing())))
+        assert_in(self.o, list(self.db.query(Key('key').startswith('Test'))))
 
     def test_query_keyed(self):
         p1 = self.db.get("some_id")
@@ -105,12 +106,6 @@ class TestInRam():
             (u"Other Person", p2),
             (u"Test Person", p1),
         ])
-
-    def test_query_objids(self):
-        assert_not_in(self.o.id, self.db.query_ids({u'key': 'Not here'}))
-        assert_in(self.o.id, list(self.db.query_ids({u'key': u'Test Person'})))
-        assert_in(self.o.id, list(self.db.query_ids({u'apa': None})))
-        assert_in(self.o.id, list(self.db.query_ids({u'key': Starts('Test')})))
 
     def test_update_empty(self):
         self.o[u'key'] = Set([])
@@ -155,7 +150,7 @@ class TestInRam():
         with self.db.transaction() as t:
             t.delete(o)
         assert_equal(db[o.id], Object(o.id))
-        assert_equal(list(db.query({"key": ANY})), [])
+        assert_equal(list(db.query(Key("key").any())), [])
 
     def test_vacuum(self):
         db, o = self.db, self.o
@@ -193,3 +188,14 @@ class TestInRam():
         assert_equal(self.db.get_sync_state('my_peer'), {"last_received": 0})
         self.db.set_sync_state('my_peer', 2)
         assert_equal(self.db.get_sync_state('my_peer'), {"last_received": 2})
+
+    def test_select(self):
+        assert_equal(
+            self.db._select('objid').where(Key('key').any()).apply(),
+            ("SELECT objid FROM map WHERE LIKELIHOOD(keyid=?, 0.2) AND listid IS NOT NULL", (1,))
+        )
+
+        assert_equal(
+            self.db._select('objid').where(Key('NONE_EXISTING').any()).apply(),
+            ("SELECT objid FROM map WHERE LIKELIHOOD(keyid=?, 0.2) AND listid IS NOT NULL", (2,))
+        )

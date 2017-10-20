@@ -68,7 +68,7 @@ def test_DBExporter():
         t.update(Object(u"dir:apa", {
             u'directory': TimedValues(u"dir:/apa"),
         }))
-        t.update(Object('some_file', {
+        t.update(Object('tree:tiger:ASDASDSADASDASDSADASDASDSADASDASDSADASD', {
             u'directory': TimedValues(u"dir:apa/movie"),
             u'xt': TimedValues(xt),
         }))

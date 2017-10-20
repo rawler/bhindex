@@ -10,12 +10,13 @@ from concurrent import sleep
 
 from bithorde import Client, parseConfig
 from bhindex.util import cachedAssetLiveChecker
-from distdb import ANY, Sorting, TimedBefore
+from distdb import Key, ObjId, Sort
 
 SAFETY = 60
 FUDGE = 30
 MAX_BATCH = 1000
 MIN_SLEEP = 5
+UNCHECKED_SCAN_INTERVAL = 360
 
 
 class Scanner(object):
@@ -28,20 +29,34 @@ class Scanner(object):
         self.processed = 0
         self.size = 0
         self.log = getLogger('scanner')
+        self.last_unchecked_scan = 0
+
+    def pick_stale(self, expires_before):
+        q = self.db.query_keyed((
+            ObjId.startswith('tree:tiger:'),
+            Key('bh_availability').timed_before(expires_before),
+        ), '+bh_availability', fields=self.fields,
+            sortmeth=Sort.timestamp)
+        for _, obj in q:
+            yield obj.getitem('bh_availability').t, obj.id
+
+    def pick_unchecked(self):
+        q = self.db.query_ids((
+            ObjId.startswith('tree:tiger:'),
+            Key('bh_availability').missing(),
+        ))
+        for id in q:
+            yield 0, id
 
     def pick_batch(self, expires_before, limit=MAX_BATCH):
-        objs = chain(
-            ((0, id) for id in self.db.query_ids({
-                'xt': ANY,
-                'bh_availability': None,
-            })),
-            ((obj.getitem('bh_availability').t, obj.id) for _, obj in
-                self.db.query_keyed({
-                    'xt': ANY,
-                    'bh_availability': TimedBefore(expires_before),
-                }, '+bh_availability', fields=self.fields,
-                sortmeth=Sorting.timestamp)),
-        )
+        objs = self.pick_stale(expires_before)
+
+        # pick_unchecked is slow, and unlikely to yield anything
+        # so only run it in big intervals
+        if self.last_unchecked_scan < expires_before - UNCHECKED_SCAN_INTERVAL:
+            objs = chain(self.pick_unchecked(), objs)
+            self.last_unchecked_scan = expires_before
+
         return islice(objs, limit)
 
     def _fudged_batch(self, expires_before, fudge=FUDGE):
@@ -93,7 +108,7 @@ def main(args, config, db):
     scanner = Scanner(db, bithorde)
 
     if args.all_objects:
-        scanner.run_batch(db.query({'xt': ANY}, scanner.fields))
+        scanner.run_batch(db.query(ObjId.startswith('tree:tiger:'), scanner.fields))
         scanner.log.info("Scanned %d assets. %d available, totaling %d GB",
                          scanner.processed, scanner.available, scanner.size / (1024 * 1024 * 1024))
     else:
