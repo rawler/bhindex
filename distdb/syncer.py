@@ -207,28 +207,48 @@ class SyncConnection(object):
         return len(updates)
 
 
-class KeyHolder(object):
-    def __init__(self, dict):
-        self.dict = dict
-        self.keys = set()
+class OwnedKeyDict:
+    def __init__(self):
+        self._dict = dict()
 
-    def __enter__(self):
-        return self
+    def __getitem__(self, k):
+        return self._dict[k]
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        for key in self.keys:
-            try:
-                del self.dict[key]
-            except KeyError:
-                pass
+    def __contains__(self, k):
+        return k in self._dict
 
-    def set_key(self, key, value):
-        self.keys.add(key)
-        if key in self.dict:
-            return None   # Slot was already occupied
-        else:
-            self.dict[key] = value
-            return value  # Slot was empty, we set a new key
+    def itervalues(self):
+        return self._dict.itervalues()
+
+    def values(self):
+        return self._dict.values()
+
+    def owner(self):
+        return self.KeyOwner(self._dict)
+
+    class KeyOwner:
+        def __init__(self, dict):
+            self.dict = dict
+            self.keys = set()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            for key in self.keys:
+                try:
+                    del self.dict[key]
+                except KeyError:
+                    pass
+
+        def set_key(self, key, value):
+            if key in self.dict:
+                return None   # Slot was already occupied
+            else:
+                # Slot was empty, we set a new key
+                self.keys.add(key)
+                self.dict[key] = value
+                return value
 
 
 class P2P(object):
@@ -237,7 +257,7 @@ class P2P(object):
             listen = ('0.0.0.0', listen)
         self.uuid = uuid()
         self.handler = handler
-        self.connections = dict()
+        self.connections = OwnedKeyDict()
         self.connect_interval = connect_interval
         self._connectAddresses = dict((addr, True) for addr in connect_addresses)
         self._sock = concurrent.listen(listen)
@@ -265,6 +285,7 @@ class P2P(object):
             for address, sock in connectPool.imap(_connect, addresses):
                 if sock:
                     self._connectAddresses[address] = False
+
                     def run():
                         try:
                             self._connectionWrapper(sock, address, address)
@@ -280,13 +301,13 @@ class P2P(object):
         else:
             logging.debug("Connection established from %s", sock.getpeername())
 
-        with KeyHolder(self.connections) as kh:
+        with self.connections.owner() as o:
             def set_session(uuid, s):
                 if not self._sock:
                     return False
                 if connectAddress in self._connectAddresses:
                     self._connectAddresses[connectAddress] = uuid
-                return kh.set_key(uuid, s)
+                return o.set_key(uuid, s)
             self.handler(sock, set_session)
 
     def local_addr(self):
@@ -359,10 +380,8 @@ class Syncer(P2P):
                         sent += conn.db_push()
                     except IOError:
                         logging.debug("Failed to push to %s, disconnecting", conn.peername)
-                        self.connections.pop(conn.peername, None)
                     except Exception:
                         logging.exception("%s push hit error", conn.peername)
-                        self.connections.pop(conn.peername, None)
                         conn.shutdown()
             if sent:
                 concurrent.sleep(0)
