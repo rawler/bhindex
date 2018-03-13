@@ -1,13 +1,11 @@
 from collections import deque
 
-from google.protobuf.internal.encoder import MessageEncoder as _MessageEncoder
-
-from bithorde.protocol import decodeMessage
+from bithorde.protocol import decodeMessage, encodeMessage
 from distdb import sync_pb2
 
 
 class StringBuf(object):
-    def __init__(self, str=''):
+    def __init__(self):
         self._buf = ''
 
     def append(self, data):
@@ -28,7 +26,7 @@ class MessageDecoder(object):
         buf = StringBuf()
 
         def decoder(data):
-            buf.append(data)
+            buf.append(str(data))
 
             while True:
                 try:
@@ -44,20 +42,20 @@ class MessageDecoder(object):
 
 class MessageEncoder(object):
     def __init__(self, msg_map):
-        self._encoder_map = dict(
-            (name, _MessageEncoder(field.number, False, False)) for name, field in msg_map.iteritems()
+        self.msg_type_map = dict(
+            (name, field.number) for name, field in msg_map.iteritems()
         )
 
     def __call__(self, tgt):
         def encoder(name, data):
-            enc = self._encoder_map[name]
+            msgtype = self.msg_type_map[name]
             x = 0
             if hasattr(data, '__iter__'):
                 for msg in data:
-                    enc(tgt, msg)
+                    tgt(encodeMessage(msg, msgtype=msgtype))
                     x += 1
             else:
-                enc(tgt, data)
+                tgt(encodeMessage(data, msgtype=msgtype))
                 x = 1
             return x
         return encoder

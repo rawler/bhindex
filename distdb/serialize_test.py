@@ -59,4 +59,3 @@ class test_MessageQueue():
 
     def test_clear(self):
         assert_equal(self.q.clear(), [hello_world, hello_other])
-
