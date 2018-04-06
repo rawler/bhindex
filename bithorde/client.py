@@ -237,27 +237,23 @@ class Client:
             return asset.wait_for_result()
 
     def _read(self, request):
-        response = None
         retries = 0
         reqId = self._reqIdAllocator.alloc()
         try:
             request.reqId = reqId
             respond = concurrent.Event()
             self._pendingReads[reqId] = respond
-            self._connection.send(request)
             timeout = (request.timeout + 250) / 1000.0
 
-            while not response and retries < 3:
-                retries += 1
+            while retries < 3:
+                self._connection.send(request)
                 try:
-                    response = respond.wait(timeout)
+                    return respond.wait(timeout)
                 except concurrent.Timeout:
-                    response = None
+                    retries += 1
         finally:
             del self._pendingReads[reqId]
             self._reqIdAllocator.free(reqId)
-
-        return response
 
     def pool(self):
         return self._pool
