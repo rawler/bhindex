@@ -1,16 +1,15 @@
 from __future__ import absolute_import
 
-import logging
-import re
-import socket
-import os
 from collections import deque
 from contextlib import closing
+import logging
+import os
+import re
+import socket
 
 from .protocol import decodeMessage, encodeMessage, message
 from .util import fsize, read_in_chunks
-
-import concurrent
+from thread_io import spawn, Promise, Timeout, ThreadPool
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +33,9 @@ class Connection:
             family = socket.AF_INET
         else:
             family = socket.AF_UNIX
-        self._socket = concurrent.connect(tgt, family)
+        sock = socket.socket(family, socket.SOCK_STREAM)
+        sock.connect(tgt)
+        self._socket = sock
 
     def send(self, msg):
         msgbuf = encodeMessage(msg)
@@ -106,29 +107,22 @@ class BaseAsset(object):
 class Asset(BaseAsset):
     def __init__(self, client, handle):
         super(Asset, self).__init__(client, handle)
-        self._status = None
-        self._statusWatch = concurrent.Event()
+        self._status = Promise()
         self._pendingReads = dict()
 
     def status(self):
-        if self._statusWatch:
-            if not self._client:
-                return None
+        if not self._client:
+            return None
 
-            timeout = (self._client.config['asset_timeout'] + 200) / 1000.0
-            try:
-                return self._statusWatch.wait(timeout)
-            except concurrent.Timeout:
-                logger.debug("Status() timeout on %s:%d", self._client, self._handle)
-                return None
-        else:
-            return self._status
+        timeout = (self._client.config['asset_timeout'] + 200) / 1000.0
+        try:
+            return self._status.wait(timeout)
+        except Timeout:
+            logger.debug("Status() timeout on %s:%d", self._client, self._handle)
+            return None
 
     def _processStatus(self, status):
-        self._status = status
-        if self._statusWatch:
-            self._statusWatch.send(status)
-            self._statusWatch = None
+        self._status.set(status)
 
     def read(self, offset, size):
         assert self._client, self._handle
@@ -152,12 +146,12 @@ class Asset(BaseAsset):
 class UploadAsset(BaseAsset):
     def __init__(self, client, handle):
         super(UploadAsset, self).__init__(client, handle)
-        self.begin = concurrent.Event()
-        self.result = concurrent.Event()
+        self.status = Promise()
+        self.result = Promise()
         self.progress = 0
 
     def wait_for_ok(self):
-        ack = self.begin.wait()
+        ack = self.status.wait()
         if ack.status != message.SUCCESS:
             stat = message._STATUS.values_by_number[ack.status].name
             raise Exception("Upload start failed with %s" % stat)
@@ -168,19 +162,17 @@ class UploadAsset(BaseAsset):
             self._client._connection.send(message.DataSegment(handle=self._handle, offset=offset, content=block))
             offset += len(block)
 
-    def wait_for_result(self):
-        result = self.result.wait()
+    def wait_for_result(self, timeout=None):
+        result = self.result.wait(timeout)
         if result.status != message.SUCCESS:
             stat = message._STATUS.values_by_number[result.status].name
             raise Exception("Upload start failed with %s" % stat)
         return result
 
     def _processStatus(self, status):
-        self.progress = status.availability
-        if not self.begin.ready():
-            self.begin.send(status)
-        elif status.ids or status.status != message.SUCCESS:
-            self.result.send(status)
+        self.status.set(status)
+        if status.ids or status.status != message.SUCCESS:
+            self.result.set(status)
 
 
 class Client:
@@ -192,7 +184,7 @@ class Client:
         self._reqIdAllocator = _Allocator()
         self._pendingReads = dict()
 
-        self._pool = concurrent.Pool(config['pressure'])
+        self._pool = ThreadPool(config['pressure'])
 
         if autoconnect:
             self.connect()
@@ -202,7 +194,7 @@ class Client:
         if not address:
             address = config['address']
         self._connection = Connection(address, config.get('myname', 'bhindex'))
-        self._reader_greenlet = concurrent.spawn(self._reader)
+        spawn(self._reader)
 
     def __repr__(self):
         return "Client(peername=%s)" % self._connection.peername
@@ -241,7 +233,7 @@ class Client:
         reqId = self._reqIdAllocator.alloc()
         try:
             request.reqId = reqId
-            respond = concurrent.Event()
+            respond = Promise()
             self._pendingReads[reqId] = respond
             timeout = (request.timeout + 250) / 1000.0
 
@@ -249,7 +241,7 @@ class Client:
                 self._connection.send(request)
                 try:
                     return respond.wait(timeout)
-                except concurrent.Timeout:
+                except Timeout:
                     retries += 1
         finally:
             del self._pendingReads[reqId]
@@ -259,7 +251,7 @@ class Client:
         return self._pool
 
     def _close(self, handle):
-        self._assets[handle] = getattr(self._assets[handle], '_status', None)
+        self._assets[handle] = self._assets[handle]._status.get()
         self._connection.send(message.BindRead(handle=handle, timeout=1000 * 3600))
 
     def _reader(self):
@@ -294,13 +286,13 @@ class Client:
 
     def _processReadResponse(self, response):
         try:
-            event = self._pendingReads[response.reqId]
+            promise = self._pendingReads[response.reqId]
             self._pendingReads[response.reqId] = None
         except KeyError:
             logger.warn("Ignoring unrecognized %s ReadResponse", str(response)[:1024])
             return
-        if event:
-            event.send(response)
+        if promise:
+            promise.set(response)
         else:
             logger.warn("ReadResponse %d recieved twice", response.reqId)
 

@@ -7,7 +7,6 @@ from time import time
 from types import GeneratorType
 from warnings import warn
 
-import concurrent
 from bithorde import parseHashIds, message
 from distdb import AsyncCommitter
 
@@ -94,27 +93,6 @@ class Timer:
         return Duration(time() - self.epoch)
 
 
-class DelayedAction(object):
-    def __init__(self, action):
-        self.action = action
-        self._scheduled = None
-
-    def schedule(self, delay):
-        if self._scheduled is None:
-            self._scheduled = concurrent.spawn_after(delay, self.fire)
-
-    def fire(self):
-        self._scheduled = None
-        self.action()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, traceback):
-        if self._scheduled:
-            self.fire()
-
-
 def time_str(t):
     if abs(t) < 120:
         return "%d seconds" % t
@@ -133,8 +111,8 @@ def time_str(t):
 
 def object_string(obj):
     try:
-        return obj['xt']
-    except:
+        return u', '.join(obj['xt'])
+    except KeyError:
         return obj.id
 
 
@@ -251,7 +229,6 @@ def _cachedCheckAsset(bithorde, obj, now, required_validity):
     if dbStatus is None:
         return _checkAsset(bithorde, obj, now)
     else:
-        concurrent.sleep()  # Not sleeping here could starve other greenlets
         return obj, dbStatus
 
 
@@ -334,21 +311,3 @@ def timed(method):
                 res = list(res)
         return res
     return timed
-
-
-class RepeatingTimer(object):
-    def __init__(self, interval, code):
-        self.running = True
-        self.running = concurrent.spawn(self._run, interval, code)
-
-    def _run(self, interval, code):
-        now = time()
-        next = now + interval
-        while self.running:
-            concurrent.sleep(next - now)
-            code()
-            now = time()
-            next = max(now, next + interval)
-
-    def cancel(self):
-        self.running = None

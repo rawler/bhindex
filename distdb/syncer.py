@@ -1,10 +1,10 @@
-import logging
 from cStringIO import StringIO
 from obj import Set
 from uuid import uuid4 as uuid
+import logging
+import socket
 
-import concurrent
-from concurrent import socket
+from thread_io import connect, listen, serve, sleep, spawn, ThreadPool
 
 from distdb.serialize import MESSAGE_DECODER, MESSAGE_ENCODER, MessageQueue
 from distdb import sync_pb2, Transaction
@@ -54,6 +54,7 @@ class SyncConnection(object):
             return
         self.peername = peerhello.name
         with self.db.transaction():
+            print("QWASDASD")
             self._last_serial_received = self.db.get_sync_state(self.peername)['last_received']
             self._sendmsg(['setup', sync_pb2.Setup(
                 last_serial_received=self._last_serial_received,
@@ -178,7 +179,7 @@ class SyncConnection(object):
 
     def run(self):
         while self._step():
-            concurrent.sleep()
+            sleep(0.0001)
 
     def db_push(self):
         def poll_updates(last_serial):
@@ -223,10 +224,10 @@ class OwnedKeyDict:
     def values(self):
         return self._dict.values()
 
-    def owner(self):
-        return self.KeyOwner(self._dict)
+    def key_context(self):
+        return self.KeyContext(self._dict)
 
-    class KeyOwner:
+    class KeyContext:
         def __init__(self, dict):
             self.dict = dict
             self.keys = set()
@@ -252,17 +253,17 @@ class OwnedKeyDict:
 
 
 class P2P(object):
-    def __init__(self, listen, handler, connect_addresses=set(), connect_interval=30):
-        if isinstance(listen, int):
-            listen = ('0.0.0.0', listen)
+    def __init__(self, listen_addr, handler, connect_addresses=set(), connect_interval=30):
+        if isinstance(listen_addr, int):
+            listen_addr = ('0.0.0.0', listen_addr)
         self.uuid = uuid()
         self.handler = handler
         self.connections = OwnedKeyDict()
         self.connect_interval = connect_interval
         self._connectAddresses = dict((addr, True) for addr in connect_addresses)
-        self._sock = concurrent.listen(listen)
-        self._server = concurrent.spawn(concurrent.serve, self._sock, self._connectionWrapper)
-        self._connectThread = concurrent.spawn(self._connector)
+        self._sock = listen(listen_addr)
+        self._server = spawn(serve, self._sock, self._connectionWrapper)
+        self._connectThread = spawn(self._connector)
         logging.getLogger('syncer').info("Listening on %s", listen)
 
     def add_address(self, addr):
@@ -275,11 +276,11 @@ class P2P(object):
     def _connector(self):
         def _connect(addr):
             try:
-                return addr, concurrent.connect(addr)
+                return addr, connect(addr)
             except Exception:
                 return addr, None
 
-        connectPool = concurrent.Pool(20)
+        connectPool = ThreadPool(20)
         while self._sock:
             addresses = [addr for addr, uuid in self._connectAddresses.iteritems() if uuid and (uuid not in self.connections)]
             for address, sock in connectPool.imap(_connect, addresses):
@@ -292,8 +293,8 @@ class P2P(object):
                         finally:
                             if not self._connectAddresses[address]:
                                 self._connectAddresses[address] = True
-                    concurrent.spawn(run)
-            concurrent.sleep(self.connect_interval)
+                    spawn(run)
+            sleep(self.connect_interval)
 
     def _connectionWrapper(self, sock, client_address, connectAddress=None):
         if connectAddress:
@@ -301,7 +302,7 @@ class P2P(object):
         else:
             logging.debug("Connection established from %s", sock.getpeername())
 
-        with self.connections.owner() as o:
+        with self.connections.key_context() as o:
             def set_session(uuid, s):
                 if not self._sock:
                     return False
@@ -332,7 +333,7 @@ class P2P(object):
 
             # Connect to break possibly hung accept()-call
             try:
-                concurrent.connect(sname)
+                connect(sname)
             except socket.error:
                 pass
         self.wait()
@@ -344,7 +345,7 @@ class Syncer(P2P):
         self.name = name
         super(Syncer, self).__init__(port, self._spawn, connect_addresses, connect_interval)
         self.running = True
-        self._pusher = concurrent.spawn(self._db_push, db_poll_interval)
+        self._pusher = spawn(self._db_push, db_poll_interval)
 
     def _spawn(self, sock, set_session):
         peer = sock.getpeername()
@@ -384,9 +385,9 @@ class Syncer(P2P):
                         logging.exception("%s push hit error", conn.peername)
                         conn.shutdown()
             if sent:
-                concurrent.sleep(0)
+                sleep(0)
             else:
-                concurrent.sleep(db_poll_interval)
+                sleep(db_poll_interval)
 
     def close(self):
         self.running = False

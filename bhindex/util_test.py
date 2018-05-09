@@ -2,7 +2,6 @@ from mock import MagicMock
 
 from nose.tools import *
 
-import concurrent
 from distdb import Object
 from distdb.obj import TimedValues
 from .util import *
@@ -99,12 +98,3 @@ def test_calc_new_availability():
     )
     assert_equal(calc_new_availability(True, None), (600, 60))
     assert_equal(calc_new_availability(False, None), (-600, 60))
-
-
-def test_DelayedAction():
-    ctr = MagicMock()
-    a = DelayedAction(ctr)
-    a.schedule(0.05)
-    a.schedule(0.5)
-    concurrent.sleep(0.1)
-    ctr.assert_called_once_with()

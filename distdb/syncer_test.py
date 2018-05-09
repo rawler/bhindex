@@ -1,14 +1,15 @@
 from nose.tools import *
 from time import time
 from mock import patch
+import socket
 
 from distdb.serialize import *
 from distdb.syncer import *
-from distdb import DB, Object, syncer, sync_pb2
+from distdb import DB, Object, sync_pb2
 
 from .obj import Set
 
-import concurrent
+from thread_io import spawn
 
 HOURS = 3600
 
@@ -18,17 +19,17 @@ def future(n, unit):
 
 
 def run_parallel(*jobs):
-    running = [concurrent.spawn(x) for x in jobs]
+    running = [spawn(x) for x in jobs]
     return [x.wait() for x in running]
 
 
 def socket_pair():
-    s = concurrent.socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind(('', 0))
     try:
         s.listen(1)
-        t = concurrent.spawn(s.accept)
-        c1 = concurrent.connect(s.getsockname())
+        t = spawn(s.accept)
+        c1 = connect(s.getsockname())
         c2, _ = t.wait()
         return c1, c2
     except:
@@ -44,7 +45,7 @@ def wait_for(condition, timeout=1):
         i += interval
         if i > timeout:
             raise Exception("Timeout in wait_for(%s)" % condition)
-        concurrent.sleep(interval)
+        sleep(interval)
 
 
 class TestSyncConnection():
@@ -243,20 +244,20 @@ class TestP2P():
         assert_is_not_none(self.s.local_addr())
 
     def test_connect(self):
-        s = concurrent.connect(self.s.local_addr())
+        s = connect(self.s.local_addr())
         assert_is_not_none(s)
         s.send("apa")
         assert_equal(s.recv(1024), "apa")
         s.close()
 
     def test_connected(self):
-        s = concurrent.connect(self.s.local_addr())
+        s = connect(self.s.local_addr())
         s.send("apa")
         wait_for(lambda: "apa" in self.s.connections)
         s.close()
 
     def test_sessionTermination(self):
-        s = concurrent.connect(self.s.local_addr())
+        s = connect(self.s.local_addr())
         s.send("apa")
         wait_for(lambda: "apa" in self.s.connections)
         s.shutdown(socket.SHUT_WR)
@@ -264,16 +265,16 @@ class TestP2P():
         wait_for(lambda: "apa" not in self.s.connections)
 
     def test_already_connected(self):
-        s = concurrent.connect(self.s.local_addr())
+        s = connect(self.s.local_addr())
         s.send("apa")
         wait_for(lambda: "apa" in self.s.connections)
 
-        s1 = concurrent.connect(self.s.local_addr())
+        s1 = connect(self.s.local_addr())
         s1.send("apa")
         assert_equal(s1.recv(1024), "")
 
     def test_connector(self):
-        s = concurrent.listen(('', 0))
+        s = listen(('', 0))
         s.listen(3)
         self.s.add_address(s.getsockname())
         s.settimeout(0.4)
@@ -283,17 +284,17 @@ class TestP2P():
         wait_for(lambda: uuid in self.s._connectAddresses.values())
 
     def test_connector_does_not_reconnect(self):
-        s = concurrent.listen(('', 0))
+        s = listen(('', 0))
         s.listen(3)
         self.s.add_address(s.getsockname())
         s.settimeout(0.2)
         client, _ = s.accept()
 
-        assert_raises(concurrent.socket.error, s.accept)
+        assert_raises(socket.error, s.accept)
 
         uuid = "apa"
         client.send(uuid)
-        assert_raises(concurrent.socket.error, s.accept)
+        assert_raises(socket.error, s.accept)
 
         client.shutdown(socket.SHUT_RDWR)
         client, _ = s.accept()
@@ -313,7 +314,7 @@ class TestSyncServer():
 
     def connect(self, name="Syncer2"):
         db = DB(':memory:')
-        s = concurrent.connect(self.s.local_addr())
+        s = connect(self.s.local_addr())
         return SyncConnection(db, name, s, None)
 
     def test_simple_sync(self):

@@ -1,9 +1,7 @@
 import inspect
 import sqlite3
 from time import time
-from threading import Event, Thread
-
-import concurrent
+from threading import Event, Thread, RLock
 
 from obj import Object, TimedValues
 from query import Key as QueryKey, Condition, Query, Sort
@@ -240,7 +238,7 @@ class DB(object):
         self.cursor = self.conn.cursor()
         create_DB(self.conn)
         self.keys = Keys(self)
-        self.lock = concurrent.ThreadLock()
+        self.lock = RLock()
         self.in_transaction = None
 
     def clone(self):

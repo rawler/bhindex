@@ -6,7 +6,7 @@ from random import randint
 from time import time
 from warnings import warn
 
-from concurrent import sleep
+from time import sleep
 
 from bithorde import Client, parseConfig
 from bhindex.util import cachedAssetLiveChecker

@@ -24,7 +24,7 @@ from stat import S_IFDIR
 from os import path
 import os
 
-from concurrent import Pool, trampoline
+from thread_io import ThreadPool
 
 
 # Tries to locate a shared library, with fallbacks over ctypes.find_library
@@ -343,11 +343,12 @@ class FUSELL(object):
 
     def run(self):
         assert self.chan
-        pool = Pool(size=self.parallel)
+        pool = ThreadPool(self.parallel)
         try:
             self._fuse_run_session(pool)
         finally:
-            pool.waitall()
+            pool.close()
+            pool.join()
 
     def _dispatcher(self, pool, method):
         def _handler(req, *args):
@@ -359,7 +360,7 @@ class FUSELL(object):
         def _dispatch(req, *args):
             # Copy pointer-values in args. They will not be valid later
             args = [_copy_value(x) for x in args]
-            pool.spawn(_handler, req, *args)
+            pool.apply_async(_handler, [req] + args)
         return _dispatch
 
     def _fuse_run_session(self, pool):
@@ -380,9 +381,7 @@ class FUSELL(object):
             chan = self.chan
             libfuse.fuse_session_add_chan(session, chan)
             try:
-                fd = libfuse.fuse_chan_fd(chan)
                 while True:
-                    trampoline(fd, read=True)
                     data = create_string_buffer(64 * 1024)
                     read = libfuse.fuse_chan_recv(c_void_p_p(c_void_p(chan)), data, len(data))
                     assert read > 0

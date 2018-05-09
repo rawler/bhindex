@@ -2,10 +2,9 @@ from nose.tools import *
 
 from contextlib import closing
 from StringIO import StringIO
+from thread_io import spawn, listen, Promise
 
-from concurrent import spawn, listen
-
-from .client import *
+from .client import Client, Connection
 from . import message
 
 
@@ -14,7 +13,8 @@ class Server(object):
         super(Server, self).__init__()
         self.s = listen(('', 0), backlog=1)
         self.name = "Server"
-        self.res = spawn(self.run)
+        self.res = Promise()
+        spawn(self.run)
 
     def addr(self):
         return '%s:%d' % self.s.getsockname()
@@ -22,7 +22,7 @@ class Server(object):
     def run(self):
         with closing(self.s):
             sock, _ = self.s.accept()
-        return Connection(sock, self.name)
+        self.res.set(Connection(sock, self.name))
 
     def wait(self):
         return self.res.wait()
