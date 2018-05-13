@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 from collections import deque
 from contextlib import closing
+from time import time
 import logging
 import os
 import re
@@ -9,21 +10,31 @@ import socket
 
 from .protocol import decodeMessage, encodeMessage, message
 from .util import fsize, read_in_chunks
-from thread_io import spawn, Promise, Timeout, ThreadPool
+from thread_io import sleep, spawn, Promise, Timeout, ThreadPool
 
 logger = logging.getLogger(__name__)
+
+RECONNECT_INTERVAL = 2
 
 
 class Connection:
     HOST_PORT_RE = re.compile(r"\s*(\S+):(\d+)\s*")
 
-    def __init__(self, tgt, name=None):
+    def __init__(self, tgt, name):
         if hasattr(tgt, 'recv'):
             self._socket = tgt
         else:
             self._connect(tgt)
+        self._address = tgt
         self.buf = ""
         self.auth(name)
+
+    @property
+    def address(self):
+        if isinstance(self._address, basestring):
+            return self._address
+        else:
+            return self._address.getpeername()
 
     def _connect(self, tgt):
         m = self.HOST_PORT_RE.match(tgt)
@@ -91,7 +102,8 @@ class BaseAsset(object):
 
     def close(self):
         if self._handle is not None:
-            self._client._close(self._handle)
+            closer = ClosingAsset(self._client, self._handle, self._status.get())
+            self._client._register_closer(self._handle, closer)
         self._client = self._handle = None
 
     def __enter__(self):
@@ -105,10 +117,11 @@ class BaseAsset(object):
 
 
 class Asset(BaseAsset):
-    def __init__(self, client, handle):
+    def __init__(self, client, handle, hashIds):
         super(Asset, self).__init__(client, handle)
         self._status = Promise()
         self._pendingReads = dict()
+        self.requested_ids = hashIds
 
     def status(self):
         if not self._client:
@@ -122,7 +135,13 @@ class Asset(BaseAsset):
             return None
 
     def _processStatus(self, status):
+        old_status = self._status.get()
+        old_status = old_status and old_status.status
         self._status.set(status)
+        new_status = status and status.status
+        client = self._client
+        if client and old_status != message.SUCCESS and new_status == message.SUCCESS:
+            client._request_pending_reads(self)
 
     def read(self, offset, size):
         assert self._client, self._handle
@@ -146,7 +165,7 @@ class Asset(BaseAsset):
 class UploadAsset(BaseAsset):
     def __init__(self, client, handle):
         super(UploadAsset, self).__init__(client, handle)
-        self.status = Promise()
+        self.status = self._status = Promise()
         self.result = Promise()
         self.progress = 0
 
@@ -175,9 +194,29 @@ class UploadAsset(BaseAsset):
             self.result.set(status)
 
 
+class ClosingAsset(object):
+    def __init__(self, client, handle, status):
+        self.client = client
+        self.handle = handle
+        self.status = status
+        self.remind()
+
+    def _processStatus(self, status):
+        if status.ids or status.status != message.NOTFOUND:
+            if self.status and self.status.status != status.status:
+                logger.debug("Ignoring late %s response on closing asset (%s)", message._STATUS.values_by_number[status.status].name)
+        else:
+            self.client._release(self.handle)
+
+    def remind(self):
+        self.next_reminder = time() + 1
+        self.client._send(message.BindRead(handle=self.handle, timeout=1000 * 3600))
+
+
 class Client:
     def __init__(self, config, autoconnect=True):
         self.config = config
+        self._connection = None
         self._assets = {}
         self._handleAllocator = _Allocator()
 
@@ -190,20 +229,75 @@ class Client:
             self.connect()
 
     def connect(self, address=None):
+        c = self._connect(address)
+        self._on_connected(c)
+
+    def _connect(self, address):
         config = self.config
         if not address:
             address = config['address']
-        self._connection = Connection(address, config.get('myname', 'bhindex'))
+        return Connection(address, config.get('myname', 'bhindex'))
+
+    def _on_connected(self, connection):
+        assert self._connection is None
+        self._connection = connection
+        logger.info("Connected to: %s", connection.peername)
+        for handle, a in self._assets.iteritems():
+            assert(isinstance(a, Asset))
+            self._bind(handle, a.requested_ids)
         spawn(self._reader)
 
+    def _on_disconnected(self, connection):
+        if connection is not self._connection:
+            return
+        self._connection = None
+        logger.warn("Disconnected: %s", connection.peername)
+        self._clear_asset_statuses()
+        self._reconnect(connection.address)
+
+    def _clear_asset_statuses(self):
+        for handle, a in self._assets.items():
+            if a is None or isinstance(a, ClosingAsset):
+                self.release(handle)
+            elif isinstance(a, UploadAsset):
+                self.release(handle)
+                a.status.set(None)
+                a.result.set(None)
+            else:
+                a._status.set(None)
+
+    def _reconnect(self, address):
+        while True:
+            try:
+                c = self._connect(address)
+            except IOError:
+                sleep(self.config.get('reconnect_interval', RECONNECT_INTERVAL))
+            else:
+                return self._on_connected(c)
+
     def __repr__(self):
-        return "Client(peername=%s)" % self._connection.peername
+        if self._connection:
+            return "Client(peername=%s)" % self._connection.peername
+        else:
+            return "Client(disconnected)"
+
+    def _send(self, msg):
+        c = self._connection
+        if not c:
+            return
+        try:
+            c.send(msg)
+        except IOError:
+            self._on_disconnected(c)
+
+    def _bind(self, handle, hashIds):
+        self._send(message.BindRead(handle=handle, ids=hashIds, timeout=self.config['asset_timeout']))
 
     def open(self, hashIds):
         handle = self._handleAllocator.alloc()
-        asset = Asset(self, handle)
+        asset = Asset(self, handle, hashIds)
         self._assets[handle] = asset
-        self._connection.send(message.BindRead(handle=handle, ids=hashIds, timeout=self.config['asset_timeout']))
+        self._bind(handle, hashIds)
         return asset
 
     def _prepare_upload(self):
@@ -211,6 +305,10 @@ class Client:
         asset = UploadAsset(self, handle)
         self._assets[handle] = asset
         return asset
+
+    def _release(self, handle):
+        del self._assets[handle]
+        self._handleAllocator.free(handle)
 
     def upload(self, f):
         if isinstance(f, basestring):
@@ -233,38 +331,58 @@ class Client:
         reqId = self._reqIdAllocator.alloc()
         try:
             request.reqId = reqId
-            respond = Promise()
-            self._pendingReads[reqId] = respond
+            response = Promise()
+            response.request = request
+            self._pendingReads[reqId] = response
             timeout = (request.timeout + 250) / 1000.0
 
             while retries < 3:
-                self._connection.send(request)
+                self._send(request)
                 try:
-                    return respond.wait(timeout)
+                    return response.wait(timeout)
                 except Timeout:
                     retries += 1
         finally:
             del self._pendingReads[reqId]
             self._reqIdAllocator.free(reqId)
 
+    def _request_pending_reads(self, asset):
+        for pr in self._pendingReads.itervalues():
+            if pr and self._assets.get(pr.request.handle) is asset:
+                self._send(pr.request)
+
     def pool(self):
         return self._pool
 
-    def _close(self, handle):
-        self._assets[handle] = self._assets[handle]._status.get()
-        self._connection.send(message.BindRead(handle=handle, timeout=1000 * 3600))
+    def _register_closer(self, handle, closer):
+        self._assets[handle] = closer
+        now = time()
+        for a in self._assets.values():
+            try:
+                if a.next_reminder < now:
+                    a.remind()
+            except AttributeError:
+                pass
 
     def _reader(self):
-        for msg in self._connection:
+        c = self._connection
+        msgs = iter(c)
+        while True:
+            try:
+                msg = next(msgs)
+            except IOError:
+                return self._on_disconnected(c)
+            except StopIteration:
+                return self._on_disconnected(c)
+
             if isinstance(msg, message.AssetStatus):
                 self._processStatus(msg)
             elif isinstance(msg, message.Read.Response):
                 self._processReadResponse(msg)
             elif isinstance(msg, message.Ping):
-                self._connection.send(message.Ping())
+                self._send(message.Ping())
             else:
                 logger.warn("Unhandled message: %s %s", type(msg), msg)
-        # TODO: handle closing assets on connection close
 
     def _processStatus(self, status):
         handle = status.handle
@@ -274,15 +392,7 @@ class Client:
             logger.warn("got status about unkown asset: %s", status)
             return
 
-        if hasattr(asset, '_processStatus'):
-            asset._processStatus(status)
-        else:
-            if status.ids or status.status != message.NOTFOUND:
-                if asset and asset.status != status.status:
-                    logger.debug("Ignoring late %s response on closing asset (%s)", message._STATUS.values_by_number[status.status].name)
-            else:
-                del self._assets[handle]
-                self._handleAllocator.free(handle)
+        asset._processStatus(status)
 
     def _processReadResponse(self, response):
         try:

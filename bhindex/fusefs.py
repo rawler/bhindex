@@ -306,12 +306,9 @@ class Operations(llfuse.Operations):
             raise(llfuse.FUSEError(errno.ENOENT))
 
 
-def background_scan(args, config):
+def background_scan(args, config, bithorde):
     while True:
         try:
-            bithorde = Client(parseConfig(config.items('BITHORDE')), autoconnect=False)
-            bithorde.connect()
-
             Scanner(DB(args.db), bithorde).run()
         except Exception:
             log.exception("Error in scanner")
@@ -328,8 +325,7 @@ def prepare_args(parser, config):
 
 def setup(args, config, db):
     from .util import noop_context_manager
-    bithorde = Client(parseConfig(config.items('BITHORDE')), autoconnect=False)
-    bithorde.connect()
+    bithorde = Client(parseConfig(config.items('BITHORDE')))
 
     # fsopts = set(llfuse.default_options())
     fsopts = ['nonempty', 'allow_other', 'max_read=262144', 'fsname=bhindex']
@@ -340,7 +336,7 @@ def setup(args, config, db):
     llfuse.init(ops, args.mountpoint, fsopts)
 
     if args.scan:
-        scanner = Thread(target=background_scan, args=(args, config))
+        scanner = Thread(target=background_scan, args=(args, config, bithorde))
         scanner.setDaemon(True)
     else:
         scanner = None
