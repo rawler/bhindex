@@ -31,6 +31,7 @@ def noop_context_manager():
 
 class Counter(object):
     '''Incrementing counter in nested scopes'''
+
     def __init__(self, val=0):
         self.val = val
 
@@ -243,8 +244,18 @@ def _scan_assets(bithorde, objs, committer, checker):
     cacheUse = Counter()
     available = Counter()
     timer = Timer()
+    logger = logging \
+        .getLogger('cachedAssetLiveChecker')
 
-    for obj, status in bithorde.pool().imap(checker, objs):
+    def guarded(fun):
+        def _(*args, **kwargs):
+            try:
+                return fun(*args, **kwargs)
+            except:  # noqa
+                logger.exception("Exception thrown from checker for _scan_assets")
+        return _
+
+    for obj, status in bithorde.pool().imap(guarded(checker), objs):
         assetsChecked.inc()
 
         if obj.dirty():
@@ -268,10 +279,8 @@ def _scan_assets(bithorde, objs, committer, checker):
     else:
         cacheUsePercent = 100
         availablePercent = 100
-    logging \
-        .getLogger('cachedAssetLiveChecker') \
-        .debug("%d assets status-checked in %s. %d cached statuses used (%d%%). %d available (%d%%).",
-               assetsChecked, timer.elapsed(), cacheUse, cacheUsePercent, available, availablePercent)
+    logger.debug("%d assets status-checked in %s. %d cached statuses used (%d%%). %d available (%d%%).",
+                 assetsChecked, timer.elapsed(), cacheUse, cacheUsePercent, available, availablePercent)
 
 
 def cachedAssetLiveChecker(bithorde, objs, db=None, force=False, required_validity=None):
