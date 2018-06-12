@@ -1,4 +1,4 @@
-package bhindex.sync;
+package distdb.sync;
 
 message Hello { // Must be first message in stream
   required string name = 1;
