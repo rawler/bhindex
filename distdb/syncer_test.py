@@ -7,7 +7,7 @@ from distdb.serialize import *
 from distdb.syncer import *
 from distdb import DB, Object, sync_pb2
 
-from .obj import Set
+from .obj import TimedValues
 
 from thread_io import spawn
 
@@ -50,7 +50,7 @@ def wait_for(condition, timeout=1):
 
 class TestSyncConnection():
     def setup(self):
-        self.obj = Object(u'some_obj', {u'apa': Set(u'banan', t=0)})
+        self.obj = Object(u'some_obj', {u'apa': TimedValues(u'banan', t=0)})
 
         self.db1 = DB(':memory:')
         self.db2 = DB(':memory:')
@@ -153,7 +153,7 @@ class TestSyncConnection():
     def test_attribute_deletion(self):
         self.handshake()
 
-        self.obj[u'deleted'] = Set([u"Something"], t=445)
+        self.obj[u'deleted'] = TimedValues([u"Something"], t=445)
         with self.db1.transaction() as t:
             t.update(self.obj)
         self.syncer1.db_push()
@@ -325,11 +325,11 @@ class TestSyncServer():
         self.wait_for_connection(s2)
 
         with self.db.transaction() as t:
-            t.update(Object('apa', init={u"test": Set(u"4", t=5)}))
+            t.update(Object('apa', init={u"test": TimedValues(u"4", t=5)}))
         wait_for(lambda: 'test' in db2['apa'])
         with db2.transaction() as t:
-            t.update(Object('apa', init={u"test": Set(u"7")}))
-        wait_for(lambda: self.db['apa']['test'] == Set(u"7"))
+            t.update(Object('apa', init={u"test": TimedValues(u"7")}))
+        wait_for(lambda: self.db['apa']['test'] == TimedValues(u"7"))
 
     def test_disconnect(self):
         s = self.connect()

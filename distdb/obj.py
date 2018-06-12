@@ -23,7 +23,9 @@ class TimedValues:
     __slots__ = ("v", "t")
 
     def __init__(self, v, t=None):
-        if isinstance(v, unicode):
+        if v is None:
+            self.v = Set()
+        elif isinstance(v, unicode):
             self.v = Set([v])
         else:
             self.v = Set(v)

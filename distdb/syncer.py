@@ -1,5 +1,5 @@
 from cStringIO import StringIO
-from obj import Set
+from obj import TimedValues
 from uuid import uuid4 as uuid
 import logging
 import socket
@@ -53,7 +53,7 @@ class SyncConnection(object):
         if not peerhello:
             return
         self.peername = peerhello.name
-        with self.db.transaction():
+        with self.db.lock, self.db.transaction():
             self._last_serial_received = self.db.get_sync_state(self.peername)['last_received']
             self._sendmsg(['setup', sync_pb2.Setup(
                 last_serial_received=self._last_serial_received,
@@ -65,7 +65,7 @@ class SyncConnection(object):
         peersetup = self.read_msg(timeout=HANDSHAKE_TIMEOUT)
         if not peersetup:
             return
-        with self.db.transaction():
+        with self.db.lock, self.db.transaction():
             if peersetup.last_serial_received <= self.db.last_serial():
                 self._last_serial_sent = peersetup.last_serial_received
             else:
@@ -151,7 +151,7 @@ class SyncConnection(object):
         for msg in chunk:
             if isinstance(msg, sync_pb2.Update):
                 chunk_had += 1
-                serial = transaction.update_attr(msg.obj, msg.key, Set(msg.values, t=msg.tstamp))
+                serial = transaction.update_attr(msg.obj, msg.key, TimedValues(msg.values, t=msg.tstamp))
                 if serial:
                     self._echo_prevention.add(serial)
                     chunk_applied += 1
