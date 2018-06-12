@@ -94,6 +94,8 @@ class Transaction(object):
         keyid = self.db.keys(key)
         tstamp = self.db._query_single(
             "SELECT timestamp FROM map WHERE objid = ? AND keyid = ?", (objid, keyid))
+        if tstamp is None and not assignment.v:
+            return False
         if assignment.t > tstamp:
             newlistid = self._insert_list(assignment.v)
             with self.lock:
