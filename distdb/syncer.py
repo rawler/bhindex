@@ -54,7 +54,6 @@ class SyncConnection(object):
             return
         self.peername = peerhello.name
         with self.db.transaction():
-            print("QWASDASD")
             self._last_serial_received = self.db.get_sync_state(self.peername)['last_received']
             self._sendmsg(['setup', sync_pb2.Setup(
                 last_serial_received=self._last_serial_received,
