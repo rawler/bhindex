@@ -9,7 +9,7 @@ from distdb import DB, Object, sync_pb2
 
 from .obj import TimedValues
 
-from thread_io import spawn
+from thread_io import spawn, listen
 
 HOURS = 3600
 
@@ -24,10 +24,8 @@ def run_parallel(*jobs):
 
 
 def socket_pair():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind(('', 0))
+    s = listen(('', 0), backlog=1)
     try:
-        s.listen(1)
         t = spawn(s.accept)
         c1 = connect(s.getsockname())
         c2, _ = t.wait()

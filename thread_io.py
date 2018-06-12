@@ -1,7 +1,8 @@
 from multiprocessing.pool import ThreadPool
+from select import select as _select
 from sys import exc_info as _exc_info
 from threading import Thread as _Thread, Event as _Event
-from time import sleep
+from time import sleep, time
 from traceback import print_exception as _print_exception
 import socket as _socket
 
@@ -57,7 +58,17 @@ class Timeout(Exception):
     pass
 
 
-class _listen_socket(_socket.socket):
+class socket(_socket.socket):
+    def send_within(self, seconds, data):
+        deadline = time() + seconds
+        while len(data):
+            wait = deadline - time()
+            if wait <= 0 or _select((), (self,), (), wait) == ([], [], []):
+                raise _socket.timeout("Timed out within %d" % seconds)
+            sent = self.send(data)
+            data = data[sent:]
+
+class _listen_socket(socket):
         def __init__(self, *args, **kwargs):
             self.accepting = False
             super(_listen_socket, self).__init__(*args, **kwargs)
@@ -65,6 +76,11 @@ class _listen_socket(_socket.socket):
         def listen(self, backlog):
             self.accepting = True
             super(_listen_socket, self).listen(backlog)
+
+        def accept(self):
+            (s, addr) = super(_listen_socket, self).accept()
+            s = socket(s.family, s.type, s.proto, s._sock)
+            return s, addr
 
         def close(self):
             if self.accepting:
@@ -88,7 +104,7 @@ def serve(sock, handler):
 
 def connect(address, family=_socket.AF_INET, bind=None):
         if family in (_socket.AF_INET, _socket.AF_INET6, _socket.AF_UNIX):
-            s = _socket.socket(family, _socket.SOCK_STREAM)
+            s = socket(family, _socket.SOCK_STREAM)
             if bind:
                 s.bind(bind)
             s.connect(address)

@@ -12,6 +12,7 @@ from distdb import sync_pb2, Transaction
 from time import time
 
 HANDSHAKE_TIMEOUT = 5
+WRITE_TIMEOUT = 3
 
 
 class Deadline(object):
@@ -91,7 +92,7 @@ class SyncConnection(object):
         res = 0
         for field, msg in msg_groups:
             res += enc(field, msg)
-        self._sock.sendall(buf.getvalue())
+        self._sock.send_within(WRITE_TIMEOUT, buf.getvalue())
         return res
 
     def _read_and_queue(self, timeout=None):
@@ -198,7 +199,11 @@ class SyncConnection(object):
             if last_serial > self._last_serial_sent:
                 msg_groups.append(['checkpoint', sync_pb2.Checkpoint(serial=last_serial)])
             if msg_groups:
-                self._sendmsg(*msg_groups)
+                try:
+                    self._sendmsg(*msg_groups)
+                except socket.timeout:
+                    logging.getLogger('syncer').warning("Peer %s is blocking on writes (too slow?). Disconnecting.", self.peername)
+                    self.close()
 
         updates, last_serial = poll_updates(self._last_serial_sent)
         send_messages(updates, last_serial)
