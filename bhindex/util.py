@@ -1,11 +1,12 @@
 from __future__ import absolute_import
 
-import codecs
-import logging
-import sys
+from contextlib import contextmanager
 from time import time
 from types import GeneratorType
 from warnings import warn
+import codecs
+import logging
+import sys
 
 from bithorde import parseHashIds, message
 from distdb import AsyncCommitter
@@ -21,6 +22,11 @@ UNCHANGED_WAIT_FACTOR = 0.4
 CHANGE_WAIT_VALUE = 60
 
 statusLog = logging.getLogger('statusLog')
+
+
+@contextmanager
+def noop_context_manager():
+    yield
 
 
 class Counter(object):

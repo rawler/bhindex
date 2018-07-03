@@ -20,7 +20,7 @@ from .util import set_new_availability
 from bithorde import Client, parseConfig, message
 from distdb import DB
 
-import fusell
+import llfuse
 
 log = logging.getLogger()
 
@@ -96,19 +96,12 @@ class INode(object):
     def __del__(self):
         ino_pool.put(self.ino)
 
-    def entry(self):
-        entry = fusell.fuse_entry_param()
-        entry.ino = self.ino
-        entry.generation = 0
-        entry.entry_timeout = 2
-        entry.attr_timeout = 10
-
-        entry.attr = self.attr()
-
-        return entry
-
     def attr(self):
-        attr = fusell.c_stat()
+        attr = llfuse.EntryAttributes()
+
+        attr.generation = 0
+        attr.attr_timeout = 2
+        attr.attr_timeout = 10
 
         attr.st_ino = self.ino
         attr.st_mode = self.MODE_0555
@@ -120,12 +113,24 @@ class INode(object):
 
         attr.st_blksize = 512
         attr.st_blocks = 1
-        now = time()
-        attr.st_atime = now
-        attr.st_mtime = now
-        attr.st_ctime = now
+        self._set_times(attr)
 
         return attr
+
+    if hasattr(llfuse.EntryAttributes, 'st_atime_ns'):
+        @staticmethod
+        def _set_times(attr):
+            now = time() * 1e9
+            attr.st_atime_ns = now
+            attr.st_mtime_ns = now
+            attr.st_ctime_ns = now
+    else:
+        @staticmethod
+        def _set_times(attr):
+            now = time()
+            attr.st_atime = now
+            attr.st_mtime = now
+            attr.st_ctime = now
 
 
 class File(INode):
@@ -164,7 +169,7 @@ class Directory(INode):
         try:
             f = self.d[name]
         except NotFoundError:
-            raise(fusell.FUSEError(errno.ENOENT))
+            raise(llfuse.FUSEError(errno.ENOENT))
         else:
             return INode.map(f)
 
@@ -182,13 +187,14 @@ class Directory(INode):
         return Directory(self.d.mkdir(name))
 
 
-class Operations(fusell.Filesystem):
+class Operations(llfuse.Operations):
     def __init__(self, bithorde, database):
+        super(Operations, self).__init__()
+
         self.fs = Filesystem(database)
-        self.root = Directory(self.fs.root())
 
         self.inodes = {
-            fusell.ROOT_INODE: self.root
+            llfuse.ROOT_INODE: Directory(self.fs.root())
         }
         self.files = {}
 
@@ -200,43 +206,44 @@ class Operations(fusell.Filesystem):
             assert isinstance(inode, cls)
             return inode
         except KeyError:
-            raise(fusell.FUSEError(errno.ENOENT))
+            raise(llfuse.FUSEError(errno.ENOENT))
 
-    def lookup(self, inode_p, name):
+    def lookup(self, inode_p, name, ctx=None):
         inode_p = self._inode_resolve(inode_p, Directory)
         inode = inode_p.lookup(name.decode('utf-8'))
         self.inodes[inode.ino] = inode
-        return inode.entry()
+        return inode.attr()
 
-    def forget(self, ino, nlookup):
-        # Assuming the kernel only notifies when nlookup really reaches 0
-        try:
-            del self.inodes[ino]
-        except KeyError:
-            warnings.warn('Tried to forget something already missing.')
+    def forget(self, inodes, ctx=None):
+        for ino, nlookup in inodes:
+            # Assuming the kernel only notifies when nlookup really reaches 0
+            try:
+                del self.inodes[ino]
+            except KeyError:
+                warnings.warn('Tried to forget something already missing.')
 
-    def getattr(self, inode):
+    def getattr(self, inode, ctx=None):
         inode = self._inode_resolve(inode)
-        return inode.attr(), 10
+        return inode.attr()
 
-    def opendir(self, inode):
+    def opendir(self, inode, ctx=None):
         inode = self._inode_resolve(inode, Directory)
         return inode.ino
 
-    def readdir(self, inode, id):
+    def readdir(self, inode, id, ctx=None):
         directory = self._inode_resolve(inode, Directory)
 
         for name, inode, id in directory.readdir(id):
             yield name.encode('utf8'), inode.attr(), id
 
-    def releasedir(self, inode):
+    def releasedir(self, inode, ctx=None):
         pass
 
-    def open(self, inode, flags):
+    def open(self, inode, flags, ctx=None):
         inode = self._inode_resolve(inode, File)
         unsupported_flags = os.O_WRONLY | os.O_RDWR
         if (flags & unsupported_flags):
-            raise(fusell.FUSEError(errno.EINVAL))
+            raise(llfuse.FUSEError(errno.EINVAL))
         fh = fh_pool.get()
         asset = self.bithorde.open(inode.ids())
         status = asset.status()
@@ -247,52 +254,56 @@ class Operations(fusell.Filesystem):
             with db.transaction() as tr:
                 set_new_availability(inode.f.obj, status_ok)
                 tr.update(inode.f.obj)
-            raise(fusell.FUSEError(errno.ENOENT))
+            raise(llfuse.FUSEError(errno.ENOENT))
 
         self.files[fh] = asset
         return fh
 
-    def read(self, fh, off, size):
+    def read(self, fh, off, size, ctx=None):
         try:
             f = self.files[fh]
         except KeyError:
-            raise(fusell.FUSEError(errno.EBADF))
+            raise(llfuse.FUSEError(errno.EBADF))
 
-        return f.read(off, size)
+        res = f.read(off, size)
+        if res:
+            return res
+        else:
+            raise(llfuse.FUSEError(errno.EIO))
 
-    def release(self, fh):
+    def release(self, fh, ctx=None):
         try:
             del self.files[fh]
         except KeyError:
             warnings.warn("Trying to release unknown file handle: %s" % fh)
 
-    def statfs(self):
-        stat = fusell.c_statvfs
+    def statfs(self, ctx=None):
+        stat = llfuse.StatvfsData()
         stat.f_bsize = 64 * 1024
         stat.f_frsize = 64 * 1024
         stat.f_blocks = stat.f_bfree = stat.f_bavail = 0
         stat.f_files = stat.f_ffree = stat.f_favail = 0
         return stat
 
-    def mkdir(self, parent, name):
+    def mkdir(self, parent, name, ctx=None):
         parent = self._inode_resolve(parent, Directory)
         try:
-            return parent.mkdir(name).entry()
+            return parent.mkdir(name).attr()
         except FoundError:
-            raise(fusell.FUSEError(errno.EEXIST))
+            raise(llfuse.FUSEError(errno.EEXIST))
         except NotFoundError:
-            raise(fusell.FUSEError(errno.ENOENT))
+            raise(llfuse.FUSEError(errno.ENOENT))
 
-    def rename(self, parent, name, newparent, newname):
+    def rename(self, parent, name, newparent, newname, ctx=None):
         parent = self._inode_resolve(parent, Directory)
         newparent = self._inode_resolve(newparent, Directory)
 
         try:
             self.fs.mv((parent.d, name), (newparent.d, newname))
         except FoundError:
-            raise(fusell.FUSEError(errno.EEXIST))
+            raise(llfuse.FUSEError(errno.EEXIST))
         except NotFoundError:
-            raise(fusell.FUSEError(errno.ENOENT))
+            raise(llfuse.FUSEError(errno.ENOENT))
 
 
 def background_scan(args, config):
@@ -316,14 +327,17 @@ def prepare_args(parser, config):
 
 
 def setup(args, config, db):
+    from .util import noop_context_manager
     bithorde = Client(parseConfig(config.items('BITHORDE')), autoconnect=False)
     bithorde.connect()
 
-    fsopts = ['nonempty', 'allow_other', 'max_read=131072', 'fsname=bhindex']
+    # fsopts = set(llfuse.default_options())
+    fsopts = ['nonempty', 'allow_other', 'max_read=262144', 'fsname=bhindex']
     if args.fs_debug:
         fsopts.append('debug')
     ops = Operations(database=db, bithorde=bithorde)
-    fs = fusell.FUSELL(ops, args.mountpoint, fsopts)
+
+    llfuse.init(ops, args.mountpoint, fsopts)
 
     if args.scan:
         scanner = Thread(target=background_scan, args=(args, config))
@@ -331,14 +345,16 @@ def setup(args, config, db):
     else:
         scanner = None
 
-    return fs.mount(), (fs, scanner)
+    return noop_context_manager(), (scanner,)
 
 
-def main(fs, scanner):
+def main(scanner):
     if scanner:
         scanner.start()
 
     try:
-        fs.run()
+        llfuse.main()
     except Exception:
         log.exception("Error in FuseFS")
+    finally:
+        llfuse.close()

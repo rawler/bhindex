@@ -2,12 +2,16 @@ dist: trusty
 sudo: required
 language: python
 python:
-- '2.7'
+  - '2.7'
 addons:
   apt:
     sources:
       - travis-ci/sqlite3
     packages:
+      - libattr1-dev
+      - libfuse-dev
+      - pkg-config
+      - python-dev
       - sqlite3
 env:
   global:
@@ -34,9 +38,6 @@ env:
   - secure: gxuUzleY30Xef4YaG1QhhiE6LFQDAVulrjfLzGa2Ou20wv6peMlTq9fB8JkbfzzUVGqU+iABk+rnZU6yHrWMiGl6wv+3OIGjw28tadxCA066oHzajUF5qpIGPScP1c7r77oSu0UDUd/6qEXfeRWBI9udUIhpwIfxAHh1RoGlNoU=
   - secure: R39z4E6cdcoX8FwbLzlb6qt7Sc/GwqMXd6x1JGOHXxS5dLED7B37UJocBtOSzBLIs5eUmXa9FfT335XkOFCuk4iG6t4X78yMvGP6FRUJ+LRnej5s66lEdcGUnPMvBZt4lFVEPatYz1iFDbXcSUZImAG8zYdEYDfJfWUgZX7S1vw=
   - secure: D34JJbIXtCSpwekw2msBMupRG1Q02CvieUOlmtU91wlESxE5/lR8iShGAg+1gQp+Po9tJE8earBT70/fxgli4tjzn5XPWvea4Kj2VnOJWmBgrlVmO88rkydFG+AcvT5pbHzRpT6W7mf1vnrDpDT4KCf+6Cb36fyynvhZpDTXQvo=
-  matrix:
-  - CONCURRENT_EVENTLET=0
-  - CONCURRENT_EVENTLET=1
 install: pip install .
 script: nosetests
 before_script: ".travis/before_script.sh"

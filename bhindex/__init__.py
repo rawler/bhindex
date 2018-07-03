@@ -1,11 +1,6 @@
-from contextlib import contextmanager
 import logging
 from . import add, cat, config, fusefs, links, scanner, syncer, tree, vacuum
-
-
-@contextmanager
-def noop_context_manager():
-    yield
+from .util import noop_context_manager
 
 
 def main(args=None):
