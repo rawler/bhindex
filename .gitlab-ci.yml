@@ -1,0 +1,11 @@
+image: python:2.7
+
+before_script:
+  - apt-get update -qy
+  - apt-get install -y python-dev libattr1-dev sqlite3
+  - pip install -r requirements.txt
+
+test:
+  script:
+    - nosetests --processes=10 --process-timeout=12
+    
